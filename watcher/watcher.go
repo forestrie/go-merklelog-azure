@@ -1,3 +1,5 @@
+// Package watcher provides a poll based activity monitor for merklelogs
+// Stored in azure and using the datatrails storage layout
 package watcher
 
 // Watch for log changes, relying on the blob last idtimestamps to do so
@@ -5,7 +7,6 @@ package watcher
 
 import (
 	"fmt"
-
 	"time"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
@@ -63,7 +64,7 @@ func (w Watcher) ConfigString() string {
 
 func ConfigDefaults(cfg *WatchConfig) error {
 	if cfg.Since.Equal(time.Time{}) && cfg.IDSince == "" && cfg.Horizon == 0 {
-		return fmt.Errorf("provide horizon on its own or either of the since parameters.")
+		return fmt.Errorf("provide horizon on its own or either of the since parameters")
 	}
 	// If horizon is provided, the since values are derived
 

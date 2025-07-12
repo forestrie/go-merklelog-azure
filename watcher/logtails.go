@@ -5,7 +5,9 @@ import (
 	"slices"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/datatrails/go-datatrails-merklelog/massifs"
+	"github.com/robinbryce/go-merklelog-azure/blobschema"
+	"github.com/robinbryce/go-merklelog-azure/committer"
+	"github.com/robinbryce/go-merklelog-azure/datatrails"
 )
 
 // LogTail records the newest (highest numbered) massif path in a log It is used
@@ -27,11 +29,11 @@ type LogTailCollator struct {
 
 // NewLogTail parses the log tail information from path and returns a LogTail
 func NewLogTail(path string) (LogTail, error) {
-	number, ext, err := massifs.ParseMassifPathNumberExt(path)
+	number, ext, err := datatrails.ParseMassifPathNumberExt(path)
 	if err != nil {
 		return LogTail{}, err
 	}
-	tenant, err := massifs.ParseMassifPathTenant(path)
+	tenant, err := datatrails.ParseMassifPathTenant(path)
 	if err != nil {
 		return LogTail{}, err
 	}
@@ -49,16 +51,15 @@ func NewLogTail(path string) (LogTail, error) {
 // replaces the values on the current tail with those parsed from other and
 // returns true.  Returns false if other is older than the tail.
 func (l *LogTail) TryReplacePath(path string) bool {
-
-	if l.Ext == massifs.V1MMRMassifExt && !massifs.IsMassifPathLike(path) {
+	if l.Ext == blobschema.V1MMRMassifExt && !datatrails.IsMassifPathLike(path) {
 		return false
 	}
 
-	if l.Ext == massifs.V1MMRSealSignedRootExt && !massifs.IsSealPathLike(path) {
+	if l.Ext == blobschema.V1MMRSealSignedRootExt && !datatrails.IsSealPathLike(path) {
 		return false
 	}
 
-	number, ext, err := massifs.ParseMassifPathNumberExt(path)
+	number, ext, err := datatrails.ParseMassifPathNumberExt(path)
 	if err != nil {
 		return false
 	}
@@ -74,7 +75,6 @@ func (l *LogTail) TryReplacePath(path string) bool {
 // replaces the values on the current tail with those copied from other and
 // returns true.  Returns false if other is older than the tail.
 func (l *LogTail) TryReplaceTail(other LogTail) bool {
-
 	// The replacement needs to be for the other log
 	if l.Tenant != other.Tenant || l.Ext != other.Ext {
 		return false
@@ -169,9 +169,9 @@ func (c *LogTailCollator) collectPageItem(it *azblob.FilterBlobItem) error {
 		return err
 	}
 	// if it is missing, it will be the empty string that is set
-	lastid := massifs.GetLastIDHex(collectTags(it.Tags))
+	lastid := committer.GetLastIDHex(collectTags(it.Tags))
 
-	if lt.Ext == massifs.V1MMRMassifExt {
+	if lt.Ext == blobschema.V1MMRMassifExt {
 		cur, ok := c.Massifs[lt.Tenant]
 		if !ok {
 			lt.LastID = lastid
