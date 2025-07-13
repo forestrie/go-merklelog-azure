@@ -2,14 +2,16 @@ package massifs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/datatrails/go-datatrails-merklelog/mmr"
+	"github.com/robinbryce/go-merklelog-azure/committer"
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
 	"github.com/robinbryce/go-merklelog-azure/mmrtesting"
 	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
@@ -106,10 +108,11 @@ func TestPeakStack_popArithmetic(t *testing.T) {
 
 func TestPeakStack_StartNextMassif(t *testing.T) {
 	var err error
+	cfg := mmrtesting.NewDefaultTestConfig("TestPeakStack_StartNextMassif")
+	tc := mmrtesting.NewTestContext(t, cfg)
+	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
 
-	tc, g, _ := mmrtesting.NewAzuriteTestContext(t, "TestPeakStack_StartNextMassif")
-
-	logID := g.NewLogID()
+	logID := g.Cfg.LogID
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
 	massifHeight := uint8(2) // each masif has 2 leaves and 3 nodes + spur
@@ -487,32 +490,78 @@ func TestPeakStack_StartNextMassif(t *testing.T) {
 	mc.Data = g.PadWithNumberedLeaves(mc.Data, int(mc.Start.FirstIndex), 1<<massifHeight-1)
 }
 
+func commitLeaves(
+	ctx context.Context, tc *mmrtesting.TestContext, g *mmrtesting.TestGenerator,
+	committer *committer.MassifCommitter,
+	count uint64,
+) error {
+	if count <= 0 {
+		return nil
+	}
+	mc, err := committer.GetCurrentContext(ctx)
+	require.NoError(tc.T, err)
+	batch := g.GenerateNumberedLeafBatch(g.Cfg.LogID, 0, count)
+
+	for _, args := range batch {
+
+		_, err = mc.AddHashedLeaf(
+			sha256.New(), args.ID, args.LogID, args.AppID, nil, args.Value)
+		if errors.Is(err, massifs.ErrMassifFull) {
+			err = committer.CommitContext(ctx, mc)
+			if err != nil {
+				return err
+			}
+			mc, err = committer.GetCurrentContext(ctx)
+			if err != nil {
+				return err
+			}
+
+			// Remember to add the leaf we failed to add above
+			_, err = mc.AddHashedLeaf(
+				sha256.New(), args.ID, args.LogID, args.AppID, nil, args.Value)
+			if err != nil {
+				return err
+			}
+
+			err = nil
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	mc, err = committer.GetCurrentContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // TestPeakStack_Height4Massif2to3Size63 reproduces a peak stack issue
 func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	logger.New("INFO")
 	ctx := t.Context()
-	tc, g, _ := mmrtesting.NewAzuriteTestContext(t, "TestPeakStack_Height4Massif2to3Size63")
-	committer, err := mmrtesting.NewTestMinimalCommitter(
-		mmrtesting.TestCommitterConfig{CommitmentEpoch: 1, MassifHeight: 4}, tc, g,
-		func(logID storage.LogID, base, i uint64) mmrtesting.AddLeafArgs {
-			// Note: usage of the event hash generator must set generateForTenant before calling
-			h := sha256.New()
-			mmr.HashWriteUint64(h, base+i)
-			return mmrtesting.AddLeafArgs{
-				ID:    0,
-				AppID: make([]byte, 16),
-				Value: h.Sum(nil),
-			}
-		},
-	)
-	require.NoError(tc.T, err)
-	logID := g.NewLogID()
-	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
+	cfg := mmrtesting.NewDefaultTestConfig("TestPeakStack_Height4Massif2to3Size63")
+	tc := mmrtesting.NewTestContext(t, cfg)
+	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
+	logID := g.Cfg.LogID
 
 	MassifHeight := uint8(3)
+	committer, err := committer.NewMassifCommitter(committer.Options{
+		MassifHeight: MassifHeight,
+		LogID:        logID,
+		Store:        tc.Storer,
+	})
+	require.NoError(t, err)
+
+	pth := datatrails.StoragePrefixPath(logID)
+	tc.DeleteBlobsByPrefix(pth)
+
 	mmrSizeB := uint64(63)
 	nLeaves := mmr.LeafCount(mmrSizeB)
-	err = committer.AddLeaves(ctx, logID, 0, nLeaves)
+
+	err = commitLeaves(ctx, tc, &g, committer, nLeaves)
 	require.Nil(t, err)
 
 	// this fails
@@ -529,7 +578,7 @@ func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	iBaseLeafNode45 := iPeakNode45 - mmr.IndexHeight(iPeakNode45)
 	iLeaf45 := mmr.LeafCount(iBaseLeafNode45)
 
-	hsz := mmr.HeightSize(uint64(committer.Cfg.MassifHeight))
+	hsz := mmr.HeightSize(uint64(committer.Options.MassifHeight))
 	hlc := (hsz + 1) / 2
 	mi30 := uint32(iLeaf30 / hlc)
 	mcPeakNode30, err := massifReader.GetMassifContext(ctx, mi30)

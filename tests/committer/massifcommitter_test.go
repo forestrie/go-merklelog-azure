@@ -14,23 +14,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func mustNewCommitter(tc *mmrtesting.TestContext, opts committer.Options) *committer.MassifCommitter {
-	tc.T.Helper()
-	return mmrtesting.MustNewCommitter(tc, opts)
+func mustNewCommitter(t *testing.T, opts committer.Options) *committer.MassifCommitter {
+	t.Helper()
+	return mmrtesting.MustNewCommitter(t, opts)
 }
 
 // TestMassifCommitter_firstMassif covers creation of the first massive blob and related conditions
 func TestMassifCommitter_firstMassif(t *testing.T) {
 	var err error
+	cfg := mmrtesting.NewDefaultTestConfig("Test_mmrMassifCommitter_firstMassif")
+	tc := mmrtesting.NewTestContext(t, cfg)
+	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
 
-	tc, g, _ := mmrtesting.NewAzuriteTestContext(t, "Test_mmrMassifCommitter_firstMassif")
-	logID := g.NewLogID()
+	logID := g.Cfg.LogID
+
 	clock := time.Now()
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 	fmt.Printf("delete: %d\n", time.Since(clock)/time.Millisecond)
 
 	MassifHeight := uint8(3)
-	c := mustNewCommitter(&tc, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
 
 	var mc massifs.MassifContext
 	clock = time.Now()
@@ -45,13 +48,15 @@ func TestMassifCommitter_firstMassif(t *testing.T) {
 func TestMassifCommitter_massifFirstContext(t *testing.T) {
 	var err error
 
-	tc, g, _ := mmrtesting.NewAzuriteTestContext(t, "TestMassifCommitter_massifFirstContext")
+	cfg := mmrtesting.NewDefaultTestConfig("TestMassifCommitter_massifFirstContext")
+	tc := mmrtesting.NewTestContext(t, cfg)
+	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
 
-	logID := g.NewLogID()
+	logID := g.Cfg.LogID
 	firstBlobPath := fmt.Sprintf("v1/mmrs/%s/0/massifs/%016d.log", logID, 0)
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
-	c := mustNewCommitter(&tc, committer.Options{LogID: logID, MassifHeight: 3})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: 3})
 	if _, err = c.GetCurrentContext(t.Context()); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -61,14 +66,17 @@ func TestMassifCommitter_massifFirstContext(t *testing.T) {
 func TestMassifCommitter_massifAddFirst(t *testing.T) {
 	var err error
 
-	tc, g, _ := mmrtesting.NewAzuriteTestContext(t, "TestMassifCommitter_massifAddFirst")
+	cfg := mmrtesting.NewDefaultTestConfig("TestMassifCommitter_massifAddFirst")
+	tc := mmrtesting.NewTestContext(t, cfg)
+	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
 
-	logID := g.NewLogID()
+	logID := g.Cfg.LogID
+
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
 	MassifHeight := uint8(3)
 
-	c := mustNewCommitter(&tc, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
 
 	var mc massifs.MassifContext
 	if mc, err = c.GetCurrentContext(t.Context()); err != nil {
@@ -89,15 +97,17 @@ func TestMassifCommitter_massifAddFirst(t *testing.T) {
 }
 
 func TestMassifCommitter_massifExtend(t *testing.T) {
-	tc, g, _ := mmrtesting.NewAzuriteTestContext(t, "TestMassifCommitter_massifExtend")
+	cfg := mmrtesting.NewDefaultTestConfig("TestMassifCommitter_massifExtend")
+	tc := mmrtesting.NewTestContext(t, cfg)
+	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
 
 	var err error
 	ctx := t.Context()
 
-	logID := g.NewLogID()
+	logID := g.Cfg.LogID
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 	MassifHeight := uint8(3)
-	c := mustNewCommitter(&tc, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
 
 	var mc massifs.MassifContext
 	if mc, err = c.GetCurrentContext(ctx); err != nil {
@@ -130,12 +140,15 @@ func TestMassifCommitter_massifExtend(t *testing.T) {
 func TestMassifCommitter_massifComplete(t *testing.T) {
 	var err error
 
-	tc, g, _ := mmrtesting.NewAzuriteTestContext(t, "TestMassifCommitter_massifComplete")
-	logID := g.NewLogID()
+	cfg := mmrtesting.NewDefaultTestConfig("TestMassifCommitter_massifComplete")
+	tc := mmrtesting.NewTestContext(t, cfg)
+	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
+
+	logID := g.Cfg.LogID
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
 	MassifHeight := uint8(3)
-	c := mustNewCommitter(&tc, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
 
 	var mc massifs.MassifContext
 	if mc, err = c.GetCurrentContext(t.Context()); err != nil {
@@ -169,13 +182,15 @@ func TestMassifCommitter_massifComplete(t *testing.T) {
 func TestMassifCommitter_massifoverfilsafe(t *testing.T) {
 	var err error
 
-	tc, g, _ := mmrtesting.NewAzuriteTestContext(t, "TestMassifCommitter_massifoverfilsafe")
+	cfg := mmrtesting.NewDefaultTestConfig("TestMassifCommitter_massifoverfilsafe")
+	tc := mmrtesting.NewTestContext(t, cfg)
+	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
 
-	logID := g.NewLogID()
+	logID := g.Cfg.LogID
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
 	MassifHeight := uint8(3)
-	c := mustNewCommitter(&tc, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
 
 	var mc massifs.MassifContext
 	if mc, err = c.GetCurrentContext(t.Context()); err != nil {
@@ -211,14 +226,16 @@ func TestMassifCommitter_threemassifs(t *testing.T) {
 
 	ctx := t.Context()
 
-	tc, g, _ := mmrtesting.NewAzuriteTestContext(t, "TestMassifCommitter_threemassifs")
+	cfg := mmrtesting.NewDefaultTestConfig("TestMassifCommitter_threemassifs")
+	tc := mmrtesting.NewTestContext(t, cfg)
+	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
 
-	logID := g.NewLogID()
+	logID := g.Cfg.LogID
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
 	MassifHeight := uint8(3)
 
-	c := mustNewCommitter(&tc, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
 
 	// --- Massif 0
 

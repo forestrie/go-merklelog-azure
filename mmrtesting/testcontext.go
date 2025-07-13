@@ -4,8 +4,7 @@ package mmrtesting
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
+	"strings"
 	"testing"
 
 	"github.com/datatrails/go-datatrails-common/azblob"
@@ -18,27 +17,7 @@ type TestContext struct {
 	Log    logger.Logger
 	Storer *azblob.Storer
 	T      *testing.T
-	Cfg    TestConfig
-}
-
-// // XXX: TODO TenantMassifPrefix duplicated here to avoid import cycle. refactor
-// const (
-// 	ValueBytes       = 32
-// 	V1MMRPrefix      = "v1/mmrs"
-// 	V1MMRBlobNameFmt = "%016d.log"
-// )
-
-func MMRTestingGenerateNumberedLeaf(logID storage.LogID, base, i uint64) AddLeafArgs {
-	h := sha256.New()
-	HashWriteUint64(h, base+i)
-
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, base+i)
-	return AddLeafArgs{
-		ID:    0,
-		AppID: b,
-		Value: h.Sum(nil),
-	}
+	Cfg    *TestConfig
 }
 
 type TestConfig struct {
@@ -52,7 +31,16 @@ type TestConfig struct {
 	DebugLevel      string        // defaults to INFO
 }
 
-func NewTestContext(t *testing.T, cfg TestConfig) TestContext {
+func NewDefaultTestConfig(testLabelPrefix string) *TestConfig {
+	return &TestConfig{
+		StartTimeMS: (1698342521) * 1000, EventRate: 500,
+		TestLabelPrefix: testLabelPrefix,
+		LogID:           nil,
+		Container:       strings.ReplaceAll(strings.ToLower(testLabelPrefix), "_", ""),
+	}
+}
+
+func NewTestContext(t *testing.T, cfg *TestConfig) *TestContext {
 	c := TestContext{
 		T:   t,
 		Cfg: cfg,
@@ -78,7 +66,7 @@ func NewTestContext(t *testing.T, cfg TestConfig) TestContext {
 	// Note: we expect a 'already exists' error here and  ignore it.
 	_, _ = client.CreateContainer(t.Context(), container, nil)
 
-	return c
+	return &c
 }
 
 func (c *TestContext) GetLog() logger.Logger { return c.Log }

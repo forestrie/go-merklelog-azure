@@ -28,20 +28,13 @@ func HashWriteUint64(hasher hash.Hash, value uint64) {
 // run the values can be the same. Intended for white box tests that benefit from a
 // large volume of synthetic data.
 type TestGenerator struct {
-	Cfg           TestGeneratorConfig
+	Cfg           *TestConfig
 	T             *testing.T
 	rand          rand.Rand
 	bipWords      []string
 	StartTime     time.Time
 	LastTime      time.Time
 	leafGenerator LeafGenerator
-}
-
-type TestGeneratorConfig struct {
-	StartTimeMS     int64
-	EventRate       int // generate events, with jitter, as though they are arriving at roughly this rate / sec
-	LogID           storage.LogID
-	TestLabelPrefix string
 }
 
 // AddLeafArgs is the return value of all LeafGenerator implementations. It
@@ -54,15 +47,28 @@ type AddLeafArgs struct {
 	LogID []byte
 }
 
-type LeafGenerator func(logID storage.LogID, base, i uint64) AddLeafArgs
+type LeafGenerator func(base, i uint64) AddLeafArgs
+
+func MMRTestingGenerateNumberedLeaf(base, i uint64) AddLeafArgs {
+	h := sha256.New()
+	HashWriteUint64(h, base+i)
+
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, base+i)
+	return AddLeafArgs{
+		ID:    0,
+		AppID: b,
+		Value: h.Sum(nil),
+	}
+}
 
 // NewTestGenerator creates a deterministic, but random looking, test data generator.
 // Given the same seed, the series of data generated on different runs is identical.
 // This means that we generate valid values for things like uuid based
 // identities and simulated time stamps, but the log telemetry from successive runs will
 // be usefuly stable.
-func NewTestGenerator(t *testing.T, seed int64, cfg TestGeneratorConfig, leafGenerator LeafGenerator) TestGenerator {
-	source := rand.NewSource(seed)
+func NewTestGenerator(t *testing.T, cfg *TestConfig, leafGenerator LeafGenerator) TestGenerator {
+	source := rand.NewSource(cfg.StartTimeMS / 1000)
 	g := TestGenerator{
 		Cfg:           cfg,
 		T:             t,
@@ -73,12 +79,11 @@ func NewTestGenerator(t *testing.T, seed int64, cfg TestGeneratorConfig, leafGen
 		leafGenerator: leafGenerator,
 	}
 
-	if cfg.LogID == nil {
-		cfg.LogID = g.NewLogID()
+	if g.Cfg.TestLabelPrefix == "" {
+		g.Cfg.TestLabelPrefix = "mmrtesting."
 	}
-
-	if cfg.TestLabelPrefix == "" {
-		cfg.TestLabelPrefix = "mmrtesting."
+	if g.Cfg.LogID == nil {
+		g.Cfg.LogID = g.NewLogID()
 	}
 
 	return g
@@ -86,10 +91,10 @@ func NewTestGenerator(t *testing.T, seed int64, cfg TestGeneratorConfig, leafGen
 
 func (g *TestGenerator) GenerateNumberedLeafBatch(logID storage.LogID, base, count uint64) []AddLeafArgs {
 	h := sha256.New()
-	return g.GenerateLeafBatch(logID, base, count, func(logID storage.LogID, base, i uint64) AddLeafArgs {
+	return g.GenerateLeafBatch(base, count, func(base, i uint64) AddLeafArgs {
 		h.Reset()
 		HashWriteUint64(h, base+i)
-		args := g.leafGenerator(logID, base, i)
+		args := g.leafGenerator(base, i)
 		return AddLeafArgs{
 			ID:    args.ID,
 			AppID: args.AppID,
@@ -99,10 +104,10 @@ func (g *TestGenerator) GenerateNumberedLeafBatch(logID storage.LogID, base, cou
 	})
 }
 
-func (g *TestGenerator) GenerateLeafBatch(logID storage.LogID, base, count uint64, gf LeafGenerator) []AddLeafArgs {
+func (g *TestGenerator) GenerateLeafBatch(base, count uint64, gf LeafGenerator) []AddLeafArgs {
 	indexedLeaves := make([]AddLeafArgs, 0, count)
 	for i := range count {
-		args := gf(logID, base, i)
+		args := gf(base, i)
 		indexedLeaves = append(indexedLeaves, args)
 	}
 	return indexedLeaves
