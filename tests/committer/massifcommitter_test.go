@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
+	"github.com/google/uuid"
 	"github.com/robinbryce/go-merklelog-azure/committer"
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
 	"github.com/robinbryce/go-merklelog-azure/mmrtesting"
@@ -33,16 +34,16 @@ func TestMassifCommitter_firstMassif(t *testing.T) {
 	fmt.Printf("delete: %d\n", time.Since(clock)/time.Millisecond)
 
 	MassifHeight := uint8(3)
-	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight, Store: tc.Storer})
 
 	var mc massifs.MassifContext
 	clock = time.Now()
-	if mc, err = c.GetHeadContext(t.Context()); err != nil {
+	if mc, err = c.GetCurrentContext(t.Context()); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	fmt.Printf("Getxx: %d\n", time.Since(clock)/time.Millisecond)
-	assert.Equal(t, mc.Data == nil, true, "unexpectedly got data, probably tests re-using a container")
-	assert.Equal(t, mc.Start.MassifIndex, uint64(0))
+	assert.Equal(t, mc.Creating, true, "unexpectedly got data, probably tests re-using a container")
+	assert.Equal(t, mc.Start.MassifIndex, uint32(0))
 }
 
 func TestMassifCommitter_massifFirstContext(t *testing.T) {
@@ -53,10 +54,11 @@ func TestMassifCommitter_massifFirstContext(t *testing.T) {
 	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
 
 	logID := g.Cfg.LogID
-	firstBlobPath := fmt.Sprintf("v1/mmrs/%s/0/massifs/%016d.log", logID, 0)
+
+	firstBlobPath := fmt.Sprintf("v1/mmrs/tenant/%s/0/massifs/%016d.log", uuid.UUID(logID).String(), 0)
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
-	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: 3})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: 3, Store: tc.Storer})
 	if _, err = c.GetCurrentContext(t.Context()); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -76,7 +78,7 @@ func TestMassifCommitter_massifAddFirst(t *testing.T) {
 
 	MassifHeight := uint8(3)
 
-	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight, Store: tc.Storer})
 
 	var mc massifs.MassifContext
 	if mc, err = c.GetCurrentContext(t.Context()); err != nil {
@@ -107,7 +109,7 @@ func TestMassifCommitter_massifExtend(t *testing.T) {
 	logID := g.Cfg.LogID
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 	MassifHeight := uint8(3)
-	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight, Store: tc.Storer})
 
 	var mc massifs.MassifContext
 	if mc, err = c.GetCurrentContext(ctx); err != nil {
@@ -148,7 +150,7 @@ func TestMassifCommitter_massifComplete(t *testing.T) {
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
 	MassifHeight := uint8(3)
-	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight, Store: tc.Storer})
 
 	var mc massifs.MassifContext
 	if mc, err = c.GetCurrentContext(t.Context()); err != nil {
@@ -190,7 +192,7 @@ func TestMassifCommitter_massifoverfilsafe(t *testing.T) {
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
 	MassifHeight := uint8(3)
-	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight, Store: tc.Storer})
 
 	var mc massifs.MassifContext
 	if mc, err = c.GetCurrentContext(t.Context()); err != nil {
@@ -231,11 +233,12 @@ func TestMassifCommitter_threemassifs(t *testing.T) {
 	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
 
 	logID := g.Cfg.LogID
+	logIDStr := uuid.UUID(logID).String()
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
 	MassifHeight := uint8(3)
 
-	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight})
+	c := mustNewCommitter(t, committer.Options{LogID: logID, MassifHeight: MassifHeight, Store: tc.Storer})
 
 	// --- Massif 0
 
@@ -259,7 +262,7 @@ func TestMassifCommitter_threemassifs(t *testing.T) {
 	if mc, err = c.GetCurrentContext(ctx); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	blobPath1 := fmt.Sprintf("v1/mmrs/%s/0/massifs/%016d.log", logID, 1)
+	blobPath1 := fmt.Sprintf("v1/mmrs/tenant/%s/0/massifs/%016d.log", logIDStr, 1)
 	ac := c.Azc[mc.Start.MassifIndex]
 	assert.Equal(tc.T, ac.BlobPath, blobPath1)
 	assert.Equal(tc.T, mc.Creating, true)
@@ -282,7 +285,7 @@ func TestMassifCommitter_threemassifs(t *testing.T) {
 	if mc, err = c.GetCurrentContext(ctx); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	blobPath2 := fmt.Sprintf("v1/mmrs/%s/0/massifs/%016d.log", logID, 2)
+	blobPath2 := fmt.Sprintf("v1/mmrs/tenant/%s/0/massifs/%016d.log", logIDStr, 2)
 	ac = c.Azc[mc.Start.MassifIndex]
 	assert.Equal(tc.T, ac.BlobPath, blobPath2)
 	assert.Equal(tc.T, mc.Creating, true)
@@ -302,7 +305,7 @@ func TestMassifCommitter_threemassifs(t *testing.T) {
 	}
 	assert.Equal(tc.T, mc.Start.FirstIndex, uint64(22))
 	assert.Equal(tc.T, mc.Creating, true)
-	blobPath3 := fmt.Sprintf("v1/mmrs/%s/0/massifs/%016d.log", logID, 3)
+	blobPath3 := fmt.Sprintf("v1/mmrs/tenant/%s/0/massifs/%016d.log", logIDStr, 3)
 	ac = c.Azc[mc.Start.MassifIndex]
 	assert.Equal(tc.T, ac.BlobPath, blobPath3)
 

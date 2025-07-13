@@ -14,7 +14,7 @@ func NewFixedPaths(logID storage.LogID) *blobschema.FixedPaths {
 }
 
 func MakeFixedPaths(logID storage.LogID) blobschema.FixedPaths {
-	mr := fmt.Sprintf("%s/%s/massifs/", V1MMRPrefix, Log2TenantID(logID))
-	cr := fmt.Sprintf("%s/%s/massifseals/", V1MMRPrefix, V1MMRTenantPrefix)
+	mr := fmt.Sprintf("%s/%s/%d/massifs/", V1MMRPrefix, Log2TenantID(logID), blobschema.LogInstanceN)
+	cr := fmt.Sprintf("%s/%s/%d/massifseals/", V1MMRPrefix, V1MMRTenantPrefix, blobschema.LogInstanceN)
 	return blobschema.FixedPaths{MassifsRoot: mr, CheckpointsRoot: cr}
 }
