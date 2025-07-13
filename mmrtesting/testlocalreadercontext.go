@@ -136,7 +136,7 @@ func NewLocalMassifReaderTestContext(
 	cfg := TestConfig{
 		StartTimeMS: (1698342521) * 1000, EventRate: 500,
 		TestLabelPrefix: testLabelPrefix,
-		TenantIdentity:  "",
+		LogID:           nil,
 		Container:       strings.ReplaceAll(strings.ToLower(testLabelPrefix), "_", ""),
 	}
 
@@ -147,7 +147,7 @@ func NewLocalMassifReaderTestContext(
 		TestGeneratorConfig{
 			StartTimeMS:     cfg.StartTimeMS,
 			EventRate:       cfg.EventRate,
-			TenantIdentity:  cfg.TenantIdentity,
+			LogID:           cfg.LogID,
 			TestLabelPrefix: cfg.TestLabelPrefix,
 		},
 		MMRTestingGenerateNumberedLeaf,

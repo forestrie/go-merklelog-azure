@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	DefaultGeneratorTenantIdentity = "tenant/0684984b-654d-4301-ad10-a508126e187d"
-
 	jitterMultipler = 2
 )
 
@@ -42,7 +40,7 @@ type TestGenerator struct {
 type TestGeneratorConfig struct {
 	StartTimeMS     int64
 	EventRate       int // generate events, with jitter, as though they are arriving at roughly this rate / sec
-	TenantIdentity  string
+	LogID           storage.LogID
 	TestLabelPrefix string
 }
 
@@ -75,12 +73,12 @@ func NewTestGenerator(t *testing.T, seed int64, cfg TestGeneratorConfig, leafGen
 		leafGenerator: leafGenerator,
 	}
 
-	if cfg.TenantIdentity == "" {
-		cfg.TenantIdentity = g.NewTenantIdentity()
+	if cfg.LogID == nil {
+		cfg.LogID = g.NewLogID()
 	}
 
 	if cfg.TestLabelPrefix == "" {
-		cfg.TestLabelPrefix = "go-datatrails-merklelog.testing."
+		cfg.TestLabelPrefix = "mmrtesting."
 	}
 
 	return g
@@ -138,8 +136,13 @@ func (g *TestGenerator) SinceJitter(lastTime time.Time) time.Time {
 	return lastTime.Add(time.Millisecond * time.Duration(g.Float32()*1000.0/float32(g.Cfg.EventRate)))
 }
 
-func (g *TestGenerator) NewTenantIdentity() string {
-	return "tenant/" + g.NewRandomUUIDString(g.T)
+func (g *TestGenerator) NewLogID() storage.LogID {
+	id, err := g.NewRandomUUID()
+	if err != nil {
+		g.T.Fatalf("failed to generate uuid")
+		return nil
+	}
+	return id[:]
 }
 
 func (g *TestGenerator) NewRandomUUIDString(t *testing.T) string {

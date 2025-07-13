@@ -47,6 +47,26 @@ func (lc *LogBlobContext) ReadData(
 	if err != nil {
 		return err
 	}
+	return lc.processResponse(rr)
+}
+
+func (lc *LogBlobContext) ReadDataN(
+	ctx context.Context, readNMax int, store LogBlobReader, opts ...azblob.Option,
+) error {
+	var err error
+	var rr *azblob.ReaderResponse
+
+	rr, lc.Data, err = BlobReadN(ctx, readNMax, lc.BlobPath, store, opts...)
+	if err != nil {
+		return err
+	}
+	return lc.processResponse(rr)
+}
+
+func (lc *LogBlobContext) processResponse(rr *azblob.ReaderResponse) error {
+	if rr == nil {
+		return nil
+	}
 	lc.Tags = rr.Tags
 
 	if rr.ETag != nil {
@@ -59,6 +79,5 @@ func (lc *LogBlobContext) ReadData(
 
 	lc.LastRead = time.Now()
 	lc.ContentLength = rr.ContentLength
-
 	return nil
 }

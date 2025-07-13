@@ -3,6 +3,8 @@ package blobschema
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 )
@@ -20,6 +22,54 @@ type FixedPaths struct {
 
 type Paths struct {
 	prefixProvider prefixProvider
+}
+
+func massifIndexFromPath(storagePath string) (uint32, error) {
+	var err error
+	// ensure it doesn't end with a slash
+	storagePath = strings.TrimSuffix(storagePath, "/")
+	i := strings.LastIndex(storagePath, "/")
+	baseName := storagePath[i+1:]
+
+	for _, suffix := range []string{
+		V1MMRExtSep + V1MMRMassifExt,
+		V1MMRExtSep + V1MMRSealSignedRootExt,
+	} {
+		if !strings.HasSuffix(baseName, suffix) {
+			continue
+		}
+		i, err = strconv.Atoi(baseName[:len(baseName)-len(suffix)])
+		if err != nil {
+			return ^uint32(0), err
+		}
+		return uint32(i), nil
+
+	}
+	return ^uint32(0), fmt.Errorf("path %s has no recognisable object suffix", storagePath)
+}
+
+func (s FixedPaths) GetStoragePrefix(otype storage.ObjectType) (string, error) {
+	switch otype {
+	case storage.ObjectCheckpointsRoot, storage.ObjectCheckpoint:
+		return s.CheckpointsRoot, nil
+	case storage.ObjectMassifData, storage.ObjectMassifStart, storage.ObjectMassifsRoot:
+		return s.MassifsRoot, nil
+	default:
+		return s.MassifsRoot, nil
+	}
+}
+
+func (s FixedPaths) GetObjectIndex(storagePath string, otype storage.ObjectType) (uint32, error) {
+	switch otype {
+	case storage.ObjectCheckpoint:
+		fallthrough
+	case storage.ObjectMassifStart:
+		fallthrough
+	case storage.ObjectMassifData:
+		return massifIndexFromPath(storagePath)
+	default:
+		return ^uint32(0), fmt.Errorf("unsupported object type")
+	}
 }
 
 // GetStoragePath returns the storage path for a massif index and object type.

@@ -17,6 +17,7 @@ import (
 	"github.com/datatrails/go-datatrails-merklelog/mmr"
 	"github.com/robinbryce/go-merklelog-azure/blobschema"
 	"github.com/robinbryce/go-merklelog-azure/committer"
+	"github.com/robinbryce/go-merklelog-azure/datatrails"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,6 +43,32 @@ type TestMinimalCommitter struct {
 	SealerPubKey *ecdsa.PublicKey
 }
 
+func MustNewCommitter(tc *TestContext, opts committer.Options) *committer.MassifCommitter {
+	tc.T.Helper()
+
+	if opts.CommitmentEpoch == 0 {
+		opts.CommitmentEpoch = 1
+	}
+	if opts.LogID == nil {
+		opts.LogID = tc.Cfg.LogID
+	}
+	if opts.PathProvider == nil {
+		opts.PathProvider = datatrails.NewFixedPaths(opts.LogID)
+	}
+	if opts.Store == nil {
+		opts.Store = tc.Storer
+	}
+	if opts.Log == nil {
+		opts.Log = tc.Log
+	}
+
+	c, err := committer.NewMassifCommitter(opts)
+	if err != nil {
+		tc.T.Fatalf("failed to create committer: %v", err)
+	}
+	return c
+}
+
 // NewTestMinimalCommitter creates a minimal forestrie leaf committer for use with
 // integration testst that need to populate log content.
 func NewTestMinimalCommitter(
@@ -50,14 +77,12 @@ func NewTestMinimalCommitter(
 	g TestGenerator,
 	leafGenerator LeafGenerator,
 ) (TestMinimalCommitter, error) {
-	log := logger.Sugar.WithServiceName("merklebuilderv1")
 	c := TestMinimalCommitter{
-		Cfg: cfg,
-		log: logger.Sugar.WithServiceName("TestCommitter"),
-		tc:  tc,
-		g:   g,
-		committer: *committer.NewMassifCommitter(
-			committer.Options{CommitmentEpoch: cfg.CommitmentEpoch}, log, tc.GetStorer()),
+		Cfg:           cfg,
+		log:           logger.Sugar.WithServiceName("TestCommitter"),
+		tc:            tc,
+		g:             g,
+		committer:     *MustNewCommitter(&tc, committer.Options{}),
 		leafGenerator: leafGenerator,
 	}
 	if !c.Cfg.SealOnCommit {
@@ -79,7 +104,7 @@ func NewTestMinimalCommitter(
 func (c *TestMinimalCommitter) GetCurrentContext(
 	ctx context.Context, massifHeight uint8,
 ) (massifs.MassifContext, error) {
-	return c.committer.GetCurrentContext(ctx, c.Cfg.MassifHeight)
+	return c.committer.GetCurrentContext(ctx)
 }
 
 // ContextCommitted seals the current massif context if the context is configure with SealOnCommit
@@ -137,7 +162,7 @@ func (c *TestMinimalCommitter) ContextCommitted(ctx context.Context, mc massifs.
 	tags[committer.TagKeyLastID] = lastid
 
 	// just put it hard, without the etag check
-	_, err = c.committer.Store.Put(ctx, blobPath, azblob.NewBytesReaderCloser(data), azblob.WithTags(tags))
+	_, err = c.committer.Options.Store.Put(ctx, blobPath, azblob.NewBytesReaderCloser(data), azblob.WithTags(tags))
 	if err != nil {
 		return err
 	}
@@ -150,7 +175,7 @@ func (c *TestMinimalCommitter) AddLeaves(
 	if count == 0 {
 		return nil
 	}
-	mc, err := c.committer.GetCurrentContext(ctx, c.Cfg.MassifHeight)
+	mc, err := c.committer.GetCurrentContext(ctx)
 	if err != nil {
 		c.log.Infof("AddLeaves: %v", err)
 		return err
@@ -175,7 +200,7 @@ func (c *TestMinimalCommitter) AddLeaves(
 			if err != nil {
 				return err
 			}
-			mc, err = c.committer.GetCurrentContext(ctx, c.Cfg.MassifHeight)
+			mc, err = c.committer.GetCurrentContext(ctx)
 			if err != nil {
 				c.log.Infof("AddLeaves: %v", err)
 				return err

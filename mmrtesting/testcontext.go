@@ -47,9 +47,9 @@ type TestConfig struct {
 	StartTimeMS     int64
 	EventRate       int
 	TestLabelPrefix string
-	TenantIdentity  string // can be ""
-	Container       string // can be "" defaults to TestLablePrefix
-	DebugLevel      string // defaults to INFO
+	LogID           storage.LogID // can be nil, defaults to TestLabelPrefix
+	Container       string        // can be "" defaults to TestLablePrefix
+	DebugLevel      string        // defaults to INFO
 }
 
 func NewTestContext(t *testing.T, cfg TestConfig) TestContext {

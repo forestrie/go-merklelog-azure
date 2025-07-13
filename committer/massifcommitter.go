@@ -18,7 +18,11 @@ type pathProvider interface {
 }
 type Options struct {
 	CommitmentEpoch uint32
-	pathProvider    pathProvider
+	MassifHeight    uint8
+	LogID           storage.LogID
+	PathProvider    pathProvider
+	Log             logger.Logger
+	Store           massifStore
 }
 
 // AzureContext defines extra azure specific data associated with a particular massif
@@ -36,22 +40,27 @@ type AzureContext struct {
 type MassifCommitter struct {
 	MassifsPath string // aka tenant identity
 	Options     Options
-	Log         logger.Logger
-	Store       massifStore
-	az          map[uint32]AzureContext
+	Azc         map[uint32]AzureContext
 }
 
-func NewMassifCommitter(opts Options, log logger.Logger, store massifStore) *MassifCommitter {
+func NewMassifCommitter(opts Options) (*MassifCommitter, error) {
 	c := &MassifCommitter{
 		Options: opts,
-		Log:     log,
-		Store:   store,
 	}
-	return c
+	if opts.LogID == nil {
+		return nil, fmt.Errorf("log id is required")
+	}
+	if opts.PathProvider == nil {
+		return nil, fmt.Errorf("path provider is required")
+	}
+	if opts.Store == nil {
+		return nil, fmt.Errorf("store is required")
+	}
+	return c, nil
 }
 
 func (c *MassifCommitter) GetNativeContext(ctx context.Context, massifIndex uint32) (any, bool) {
-	az, ok := c.az[massifIndex]
+	az, ok := c.Azc[massifIndex]
 	return &az, ok
 }
 
@@ -59,11 +68,11 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc massifs.MassifCo
 	var err error
 
 	// if we are commiting there must be an extended azure context
-	az, ok := c.az[mc.Start.MassifIndex]
+	az, ok := c.Azc[mc.Start.MassifIndex]
 	if !ok {
 		return fmt.Errorf("should be retained by read")
 	}
-	delete(c.az, mc.Start.MassifIndex)
+	delete(c.Azc, mc.Start.MassifIndex)
 
 	// Note that while we are continually overwriting the blob, on the period
 	// cadence we will be publishing whatever its current mmr root is to some
@@ -90,7 +99,7 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc massifs.MassifCo
 		opts = append(opts, azblob.WithEtagNoneMatch("*"))
 	}
 
-	_, err = c.Store.Put(ctx, az.BlobPath, azblob.NewBytesReaderCloser(mc.Data),
+	_, err = c.Options.Store.Put(ctx, az.BlobPath, azblob.NewBytesReaderCloser(mc.Data),
 		opts...,
 	)
 	if err != nil {
@@ -100,12 +109,10 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc massifs.MassifCo
 	return err
 }
 
-func (c *MassifCommitter) createFirstMassifContext(
-	massifHeight uint8,
-) (massifs.MassifContext, error) {
+func (c *MassifCommitter) createFirstMassifContext() (massifs.MassifContext, error) {
 	// XXX: TODO: we _could_ just roll an id so that we never need to deal with
 	// the zero case. for the first blob that is entirely benign.
-	start := massifs.NewMassifStart(0, c.Options.CommitmentEpoch, massifHeight, 0, 0)
+	start := massifs.NewMassifStart(0, c.Options.CommitmentEpoch, c.Options.MassifHeight, 0, 0)
 
 	// the zero values, or those explicitly set above are correct
 	data, err := start.MarshalBinary()
@@ -113,7 +120,7 @@ func (c *MassifCommitter) createFirstMassifContext(
 		return massifs.MassifContext{}, err
 	}
 
-	storagePath := c.Options.pathProvider.GetStoragePath(0, storage.ObjectMassifData)
+	storagePath := c.Options.PathProvider.GetStoragePath(0, storage.ObjectMassifData)
 
 	// ? internal associative map on c ?
 	// 	LogBlobContext: LogBlobContext{
@@ -136,7 +143,7 @@ func (c *MassifCommitter) createFirstMassifContext(
 	// mc.FirstIndex zero value is correct
 	SetFirstIndex(mc.Start.FirstIndex, az.Tags)
 
-	c.az[start.MassifIndex] = az
+	c.Azc[start.MassifIndex] = az
 
 	return mc, nil
 }
@@ -145,7 +152,7 @@ func (c *MassifCommitter) createFirstMassifContext(
 //
 // The returned context is ready to accept new log entries.
 func (c *MassifCommitter) GetCurrentContext(
-	ctx context.Context, massifHeight uint8,
+	ctx context.Context,
 ) (massifs.MassifContext, error) {
 	// There are 3 states to consider here
 	// 1. No blobs exist -> setup context for creating first blob
@@ -159,10 +166,10 @@ func (c *MassifCommitter) GetCurrentContext(
 		return massifs.MassifContext{}, err
 	}
 	if errors.Is(err, storage.ErrLogEmpty) {
-		return c.createFirstMassifContext(massifHeight)
+		return c.createFirstMassifContext()
 	}
 
-	az, ok := c.az[mc.Start.MassifIndex]
+	az, ok := c.Azc[mc.Start.MassifIndex]
 	if !ok {
 		return massifs.MassifContext{}, fmt.Errorf("this should be created by get head")
 	}
@@ -243,10 +250,10 @@ func (c *MassifCommitter) GetCurrentContext(
 func (c *MassifCommitter) GetHeadContext(ctx context.Context) (massifs.MassifContext, error) {
 	mc := massifs.MassifContext{}
 
-	blobPrefixPath := c.Options.pathProvider.GetStoragePath(0, storage.ObjectMassifsRoot)
+	blobPrefixPath := c.Options.PathProvider.GetStoragePath(0, storage.ObjectMassifsRoot)
 
 	bc, massifCount, err := blobs.LastPrefixedBlob(
-		ctx, c.Store, blobPrefixPath)
+		ctx, c.Options.Store, blobPrefixPath)
 	if err != nil {
 		return mc, err
 	}
@@ -260,7 +267,7 @@ func (c *MassifCommitter) GetHeadContext(ctx context.Context) (massifs.MassifCon
 	az.LastModified = bc.LastModified
 	az.BlobPath = bc.BlobPath
 
-	c.az[massifCount-1] = az
+	c.Azc[massifCount-1] = az
 	if massifCount == 0 {
 		return mc, storage.ErrLogEmpty
 	}
@@ -274,5 +281,5 @@ func (c *MassifCommitter) GetHeadContext(ctx context.Context) (massifs.MassifCon
 func (c *MassifCommitter) cachedBlobRead(
 	ctx context.Context, blobPath string, opts ...azblob.Option,
 ) (*azblob.ReaderResponse, []byte, error) {
-	return blobs.BlobRead(ctx, blobPath, c.Store, opts...)
+	return blobs.BlobRead(ctx, blobPath, c.Options.Store, opts...)
 }
