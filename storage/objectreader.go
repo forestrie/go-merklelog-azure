@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/datatrails/go-datatrails-common/azblob"
 	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
@@ -52,23 +53,36 @@ type ObjectReader struct {
 }
 
 func NewObjectReader(opts Options) (*ObjectReader, error) {
-	r := ObjectReader{Opts: opts}
-	if err := r.checkOptions(); err != nil {
+	r := ObjectReader{}
+	if err := r.Init(opts); err != nil {
 		return nil, err
 	}
-	r.reset()
 	return &r, nil
+}
+
+func (r *ObjectReader) Init(opts Options) error {
+	r.Opts = opts
+	if err := r.checkOptions(); err != nil {
+		return err
+	}
+	r.reset()
+	return nil
 }
 
 func (r *ObjectReader) checkOptions() error {
 	if r.Opts.LogID == nil {
 		return fmt.Errorf("log id is required")
 	}
+
+	if r.Opts.Store == nil {
+		return fmt.Errorf("store is required")
+	}
+
 	if r.Opts.CommitmentEpoch == 0 {
-		r.Opts.CommitmentEpoch = 1
+		r.Opts.CommitmentEpoch = 1 // good until the next unix epoch
 	}
 	if r.Opts.MassifHeight == 0 {
-		r.Opts.MassifHeight = 14
+		r.Opts.MassifHeight = 14 // the height adopted by default for the datatrails ledger
 	}
 
 	if r.Opts.PathProvider == nil {
@@ -89,6 +103,7 @@ func (r *ObjectReader) checkOptions() error {
 func (r *ObjectReader) reset() {
 	// assuming there are no deep references to the values in the maps, this will
 	// release the maps to GC
+	r.Data = make(map[uint32][]byte)
 	r.Starts = make(map[uint32]massifs.MassifStart)
 	r.Checkpoints = make(map[uint32]*massifs.Checkpoint)
 	r.Az.Massifs = make(map[uint32]*blobs.LogBlobContext)
@@ -130,9 +145,12 @@ func (r *ObjectReader) GetData(ctx context.Context, massifIndex uint32) ([]byte,
 	var err error
 	// check the native cache first, if a HeadIndex call was used, the native data has not been read
 
+	// For simplicity, we always get tags, we don't need them for checkpoints, but we typically do for massifs
+	opts := []azblob.Option{azblob.WithGetTags()}
+
 	if native, ok := r.Az.Massifs[massifIndex]; ok {
 		if native.Data == nil || len(native.Data) <= massifs.StartHeaderEnd {
-			err = native.ReadData(ctx, r.Opts.Store)
+			err = native.ReadData(ctx, r.Opts.Store, opts...)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read massif data: %w", err)
 			}
@@ -144,13 +162,14 @@ func (r *ObjectReader) GetData(ctx context.Context, massifIndex uint32) ([]byte,
 			}
 			r.Starts[massifIndex] = start
 		}
+		// TODO: if native exists but r.Starts does not
 		return native.Data, nil
 	}
 
 	storagePath := r.Opts.PathProvider.GetStoragePath(massifIndex, storage.ObjectMassifData)
 
 	var data []byte
-	data, err = r.readMassifData(ctx, storagePath, massifIndex)
+	data, err = r.readMassifData(ctx, storagePath, massifIndex, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -159,11 +178,14 @@ func (r *ObjectReader) GetData(ctx context.Context, massifIndex uint32) ([]byte,
 
 func (r *ObjectReader) GetStart(ctx context.Context, massifIndex uint32) (massifs.MassifStart, error) {
 	var err error
-	// check the native cache first, if a HeadIndex call was used, the native data has not been read
+	// check the native cache first, if a HeadIndex call was used, the native data has not been read, but the information is otherwise correct.
+
+	// For simplicity, we always get tags, we don't need them for checkpoints, but we typically do for massifs
+	opts := []azblob.Option{azblob.WithGetTags()}
 
 	if native, ok := r.Az.Massifs[massifIndex]; ok {
 		if native.Data == nil {
-			err = native.ReadDataN(ctx, massifs.StartHeaderEnd, r.Opts.Store)
+			err = native.ReadDataN(ctx, massifs.StartHeaderEnd, r.Opts.Store, opts...)
 			if err != nil {
 				return massifs.MassifStart{}, fmt.Errorf("failed to read massif data: %w", err)
 			}
@@ -180,7 +202,7 @@ func (r *ObjectReader) GetStart(ctx context.Context, massifIndex uint32) (massif
 
 	storagePath := r.Opts.PathProvider.GetStoragePath(massifIndex, storage.ObjectMassifData)
 
-	_, err = r.readMassifData(ctx, storagePath, massifIndex)
+	_, err = r.readMassifData(ctx, storagePath, massifIndex, opts...)
 	if err != nil {
 		return massifs.MassifStart{}, err
 	}
@@ -195,11 +217,13 @@ func (r *ObjectReader) GetCheckpoint(ctx context.Context, massifIndex uint32) (*
 	var err error
 
 	// check the native cache first, if a HeadIndex call was used, the native data has not been read, but the information is otherwise correct.
+	// For simplicity, we always get tags, we don't need them for checkpoints, but we typically do for massifs
+	opts := []azblob.Option{azblob.WithGetTags()}
 
 	var data []byte
 	if native, ok := r.Az.Checkpoints[massifIndex]; ok {
 		if native.Data == nil {
-			err = native.ReadData(ctx, r.Opts.Store)
+			err = native.ReadData(ctx, r.Opts.Store, opts...)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read massif data: %w", err)
 			}
@@ -208,7 +232,7 @@ func (r *ObjectReader) GetCheckpoint(ctx context.Context, massifIndex uint32) (*
 	} else {
 
 		storagePath := r.Opts.PathProvider.GetStoragePath(massifIndex, storage.ObjectCheckpoint)
-		data, err = r.readCheckpoint(ctx, storagePath, massifIndex)
+		data, err = r.readCheckpoint(ctx, storagePath, massifIndex, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -288,15 +312,18 @@ func (r *ObjectReader) Read(ctx context.Context, storagePath string, otype stora
 		return err
 	}
 
+	// For simplicity, we always get tags, we don't need them for checkpoints, but we typically do for massifs
+	opts := []azblob.Option{azblob.WithGetTags()}
+
 	switch otype {
 	case storage.ObjectMassifStart:
 		// TODO: lazy loading optimisations
 		fallthrough
 	case storage.ObjectMassifData:
-		_, err = r.readMassifData(ctx, storagePath, massifIndex)
+		_, err = r.readMassifData(ctx, storagePath, massifIndex, opts...)
 		return err
 	case storage.ObjectCheckpoint:
-		_, err = r.readCheckpoint(ctx, storagePath, massifIndex)
+		_, err = r.readCheckpoint(ctx, storagePath, massifIndex, opts...)
 		return err
 	default:
 		return fmt.Errorf("unsupported object type %v", otype)
@@ -382,23 +409,24 @@ func (r *ObjectReader) lastObject(ctx context.Context, otype storage.ObjectType)
 	}
 }
 
-func (r *ObjectReader) readObject(ctx context.Context, storagePath string) (*blobs.LogBlobContext, error) {
+func (r *ObjectReader) readObject(ctx context.Context, storagePath string, opts ...azblob.Option) (*blobs.LogBlobContext, error) {
 	var err error
 
 	bc := blobs.LogBlobContext{
 		BlobPath: storagePath,
 	}
-	err = bc.ReadData(ctx, r.Opts.Store)
+
+	err = bc.ReadData(ctx, r.Opts.Store, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return &bc, nil
 }
 
-func (r *ObjectReader) readMassifData(ctx context.Context, storagePath string, massifIndex uint32) ([]byte, error) {
+func (r *ObjectReader) readMassifData(ctx context.Context, storagePath string, massifIndex uint32, opts ...azblob.Option) ([]byte, error) {
 	var err error
 
-	bc, err := r.readObject(ctx, storagePath)
+	bc, err := r.readObject(ctx, storagePath, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -406,10 +434,10 @@ func (r *ObjectReader) readMassifData(ctx context.Context, storagePath string, m
 	return bc.Data, nil
 }
 
-func (r *ObjectReader) readCheckpoint(ctx context.Context, storagePath string, massifIndex uint32) ([]byte, error) {
+func (r *ObjectReader) readCheckpoint(ctx context.Context, storagePath string, massifIndex uint32, opts ...azblob.Option) ([]byte, error) {
 	var err error
 
-	bc, err := r.readObject(ctx, storagePath)
+	bc, err := r.readObject(ctx, storagePath, opts...)
 	if err != nil {
 		return nil, err
 	}

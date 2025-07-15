@@ -7,119 +7,57 @@ import (
 	"time"
 
 	"github.com/datatrails/go-datatrails-common/azblob"
-	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/datatrails/go-datatrails-merklelog/mmr"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
-	"github.com/robinbryce/go-merklelog-azure/datatrails"
+	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
 )
 
-type pathProvider interface {
-	GetStoragePath(massifIndex uint32, otype storage.ObjectType) string
-}
-type Options struct {
-	CommitmentEpoch uint32
-	MassifHeight    uint8
-	LogID           storage.LogID
-	PathProvider    pathProvider
-	Log             logger.Logger
-	Store           massifStore
-}
-
-// AzureContext defines extra azure specific data associated with a particular massif
-// in the context of the finder that is also azure aware
-type AzureContext struct {
-	ETag          string
-	Tags          map[string]string
-	BlobPath      string
-	LastRead      time.Time
-	LastModified  time.Time
-	Data          []byte
-	ContentLength int64
-}
-
 type MassifCommitter struct {
-	MassifsPath string // aka tenant identity
-	Options     Options
-	Azc         map[uint32]AzureContext
+	azstorage.ObjectReader
 }
 
-func NewMassifCommitter(opts Options) (*MassifCommitter, error) {
-	if opts.LogID == nil {
-		return nil, fmt.Errorf("log id is required")
+func NewMassifCommitter(opts azstorage.Options) (*MassifCommitter, error) {
+	c := &MassifCommitter{}
+	if err := c.Init(opts); err != nil {
+		return nil, err
 	}
-	if opts.Store == nil {
-		return nil, fmt.Errorf("store is required")
-	}
-
-	if opts.PathProvider == nil {
-		opts.PathProvider = datatrails.NewFixedPaths(opts.LogID)
-	}
-	c := &MassifCommitter{
-		Options: opts,
-		Azc:     make(map[uint32]AzureContext),
-	}
-
 	return c, nil
 }
 
-// GetCurrentContext gets the current mmr blob context for the tenant
-//
-// The returned context is ready to accept new log entries.
+func (c *MassifCommitter) Init(opts azstorage.Options) error {
+	if err := c.ObjectReader.Init(opts); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *MassifCommitter) GetCurrentContext(
 	ctx context.Context,
-) (massifs.MassifContext, error) {
+) (*massifs.MassifContext, error) {
 	// There are 3 states to consider here
 	// 1. No blobs exist -> setup context for creating first blob
 	// 2. A previous full blob exists -> setup context for creating a new blob
 	// 3. The most recent blob is not full -> setup context for extending current blob
 
-	var err error
-	blobPrefixPath := c.Options.PathProvider.GetStoragePath(0, storage.ObjectMassifsRoot)
-
-	bc, massifCount, err := blobs.LastPrefixedBlob(
-		ctx, c.Options.Store, blobPrefixPath)
-	if err != nil {
-		return massifs.MassifContext{}, err
-	}
-
-	if massifCount == 0 {
+	massifIndex, err := c.HeadIndex(ctx, storage.ObjectMassifData)
+	if errors.Is(err, storage.ErrLogEmpty) {
 		return c.createFirstMassifContext()
 	}
-
-	az := AzureContext{
-		Tags:     map[string]string{},
-		BlobPath: bc.BlobPath,
-	}
-
-	az.ETag = bc.ETag
-	az.LastModified = bc.LastModified
-	az.BlobPath = bc.BlobPath
-
-	// XXX: TODO: consider the use of the etag here. I'm using it just because I
-	// think it will avoid confusing triage situations list vs get. It shouldn't
-	// actually matter at this point.
-
 	// If we are creating, we need to read the bytes from the previous blob to
 	// be able to make the first mmr entry from the root of the last massif.
+	// So we always read the blob we find with
 
-	mc := massifs.MassifContext{}
-
-	var rr *azblob.ReaderResponse
-	rr, mc.Data, err = c.cachedBlobRead(
-		ctx, az.BlobPath, azblob.WithEtagMatch(az.ETag), azblob.WithGetTags())
+	mc, err := c.GetMassifContext(ctx, massifIndex)
 	if err != nil {
-		return mc, err
+		return nil, err
 	}
 
-	// All valid massifs are created with at least the single fixed (versioned)
-	// header record.
-	err = mc.Start.UnmarshalBinary(mc.Data)
-	if err != nil {
-		return mc, err
+	az, ok := c.Az.Massifs[massifIndex]
+	if !ok {
+		return nil, fmt.Errorf("this is a bug in objectreader")
 	}
-
-	az.Tags = rr.Tags
 
 	// NOTICE: While the *index* on blob tags is eventually consistent, the tags
 	// read directly with the blob are *guaranteed* by azure to be 'the values
@@ -131,19 +69,16 @@ func (c *MassifCommitter) GetCurrentContext(
 	// updates." -- https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs?tabs=azure-portal
 	firstIndex, err := GetFirstIndex(az.Tags)
 	if err != nil {
-		return massifs.MassifContext{}, err
+		return nil, err
 	}
 	if firstIndex != mc.Start.FirstIndex {
-		return massifs.MassifContext{}, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"%w: %x vs %x",
 			ErrIncorrectFirstIndexTag,
 			firstIndex, mc.Start.FirstIndex)
 	}
 
 	// The current first & last is initialized from what we read
-
-	az.LastModified = *rr.LastModified
-	az.LastRead = time.Now()
 
 	// If the blob has space for more nodes, the context is ready and we have
 	// all the state setup.  case 3: existing blob with space, !creating.
@@ -154,43 +89,60 @@ func (c *MassifCommitter) GetCurrentContext(
 	sz := massifs.TreeSize(mc.Start.MassifHeight)
 	start := mc.LogStart()
 	if uint64(len(mc.Data))-start < sz {
-		c.Azc[massifCount-1] = az
 		return mc, nil
 	}
 
+	mcnew := *mc
+	aznew := *az
+
 	// if the previous is complete, attempt to start a new massif
-	mc.Creating = true
-	az.ETag = ""
-	az.LastModified = time.UnixMilli(0)
-	az.LastRead = time.UnixMilli(0)
+	mcnew.Creating = true
+	aznew.ETag = ""
+	aznew.LastModified = time.UnixMilli(0)
 
 	// re-create Start for the new blob
-	err = mc.StartNextMassif()
+	err = mcnew.StartNextMassif()
 	if err != nil {
-		return massifs.MassifContext{}, fmt.Errorf("failed to start next massif: %w", err)
+		return nil, fmt.Errorf("failed to start next massif: %w", err)
 	}
 
-	az.Tags[TagKeyFirstIndex] = fmt.Sprintf(TagFirstIndexFmt, mc.Start.FirstIndex)
-	az.BlobPath = c.Options.PathProvider.GetStoragePath(mc.Start.MassifIndex, storage.ObjectMassifData)
-	c.Azc[mc.Start.MassifIndex] = az
-	return mc, nil
+	aznew.BlobPath = c.Opts.PathProvider.GetStoragePath(mcnew.Start.MassifIndex, storage.ObjectMassifData)
+	aznew.Tags[TagKeyFirstIndex] = fmt.Sprintf(TagFirstIndexFmt, mcnew.Start.FirstIndex)
+
+	c.Az.Massifs[mcnew.Start.MassifIndex] = &aznew
+	return &mcnew, nil
 }
 
-func (c *MassifCommitter) GetNativeContext(ctx context.Context, massifIndex uint32) (any, bool) {
-	az, ok := c.Azc[massifIndex]
-	return &az, ok
-}
-
-func (c *MassifCommitter) CommitContext(ctx context.Context, mc massifs.MassifContext) error {
+func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifContext) error {
 	var err error
 
+	// Check we have not over filled the massif.
+
+	// Note that we need to account for the size based on the full range.  When
+	// committing massifs after the first, additional nodes are always required to
+	// "bury", the previous massif's nodes.
+
+	// leaves that the height (not the height index) allows for.
+	maxLeafIndex := ((mmr.HeightSize(uint64(mc.Start.MassifHeight)) + 1) >> 1) * uint64(mc.Start.MassifIndex + 1) - 1
+	spurHeight := mmr.SpurHeightLeaf(maxLeafIndex)
+	// The overall size of the massif that contains that many leaves.
+	maxMMRSize := mmr.MMRIndex(maxLeafIndex) + spurHeight + 1
+
+	count := mc.Count()
+
+	// The last legal index is first leaf + count - 1. The last leaf index + the
+	// height is the last node index + 1.  So we just don't subtract the one on
+	// either clause.
+	if mc.Start.FirstIndex+count > maxMMRSize {
+		return massifs.ErrMassifFull
+	}
+
 	// if we are commiting there must be an extended azure context
-	az, ok := c.Azc[mc.Start.MassifIndex]
+	az, ok := c.Az.Massifs[mc.Start.MassifIndex]
 	if !ok {
 		// in the Creating case, we should have initialized the tags and blob path when we populated the start for the new massif.
 		return fmt.Errorf("should be retained by read")
 	}
-	delete(c.Azc, mc.Start.MassifIndex)
 
 	// Note that while we are continually overwriting the blob, on the period
 	// cadence we will be publishing whatever its current mmr root is to some
@@ -217,61 +169,65 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc massifs.MassifCo
 		opts = append(opts, azblob.WithEtagNoneMatch("*"))
 	}
 
-	_, err = c.Options.Store.Put(ctx, az.BlobPath, azblob.NewBytesReaderCloser(mc.Data),
+	wr, err := c.Opts.Store.Put(ctx, az.BlobPath, azblob.NewBytesReaderCloser(mc.Data),
 		opts...,
 	)
 	if err != nil {
 		return err
 	}
+	if wr.ETag == nil {
+		return errors.New("etag is required for all writes")
+	}
+	if wr.LastModified == nil {
+		return errors.New("last modified is required for all writes")
+	}
+
+	az.Data = mc.Data
+	az.ETag = *wr.ETag
+	az.LastModified = *wr.LastModified
+	// az.ContentLength = wr.Size
+	az.ContentLength = int64(len(mc.Data))
+
+	c.Data[mc.Start.MassifIndex] = az.Data
+	c.Starts[mc.Start.MassifIndex] = mc.Start
+	if mc.Start.MassifIndex > c.LastMassifIndex {
+		c.LastMassifIndex = mc.Start.MassifIndex
+	}
 
 	return err
 }
 
-func (c *MassifCommitter) createFirstMassifContext() (massifs.MassifContext, error) {
+func (c *MassifCommitter) createFirstMassifContext() (*massifs.MassifContext, error) {
 	// XXX: TODO: we _could_ just roll an id so that we never need to deal with
 	// the zero case. for the first blob that is entirely benign.
-	start := massifs.NewMassifStart(0, c.Options.CommitmentEpoch, c.Options.MassifHeight, 0, 0)
+	start := massifs.NewMassifStart(0, uint32(c.Opts.CommitmentEpoch), c.Opts.MassifHeight, 0, 0)
 
 	// the zero values, or those explicitly set above are correct
 	data, err := start.MarshalBinary()
 	if err != nil {
-		return massifs.MassifContext{}, err
+		return nil, err
 	}
 
-	storagePath := c.Options.PathProvider.GetStoragePath(0, storage.ObjectMassifData)
+	storagePath := c.Opts.PathProvider.GetStoragePath(0, storage.ObjectMassifData)
 
-	// ? internal associative map on c ?
-	// 	LogBlobContext: LogBlobContext{
-	// 		BlobPath: TenantMassifBlobPath(massifPath, 0),
-	// 		Tags:     map[string]string{},
-	// 	},
-	az := AzureContext{
-		Tags:     map[string]string{},
+	az := &blobs.LogBlobContext{
 		BlobPath: storagePath,
+		Tags:     map[string]string{},
 	}
 
-	mc := massifs.MassifContext{
+	mc := &massifs.MassifContext{
 		Creating: true,
 		// epoch, massifIndex and firstIndex are zero and prev root is 32 bytes of zero
 		Start: start,
 	}
 	// We pre-allocate and zero-fill the index, see the commentary in StartNextMassif
-	mc.Data = append(data, mc.InitIndexData()...)
+	az.Data = append(data, mc.InitIndexData()...)
+	mc.Data = az.Data
 
 	// mc.FirstIndex zero value is correct
 	SetFirstIndex(mc.Start.FirstIndex, az.Tags)
 
-	c.Azc[start.MassifIndex] = az
+	c.Az.Massifs[start.MassifIndex] = az
 
 	return mc, nil
-}
-
-// cachedBlobRead reads the blob with potential caching and returns the
-// underlying azblob response as the most consistent way to propagate the blob
-// metadata to the caller. Note that on return, regardless of error the reader
-// is nil as it has been completely exhausted or otherwise disposed of.
-func (c *MassifCommitter) cachedBlobRead(
-	ctx context.Context, blobPath string, opts ...azblob.Option,
-) (*azblob.ReaderResponse, []byte, error) {
-	return blobs.BlobRead(ctx, blobPath, c.Options.Store, opts...)
 }

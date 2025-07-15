@@ -14,7 +14,7 @@ import (
 	"github.com/robinbryce/go-merklelog-azure/committer"
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
 	"github.com/robinbryce/go-merklelog-azure/mmrtesting"
-	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
+	"github.com/robinbryce/go-merklelog-azure/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -530,7 +530,7 @@ func commitLeaves(
 		}
 	}
 
-	mc, err = committer.GetCurrentContext(ctx)
+	_, err = committer.GetCurrentContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -548,7 +548,7 @@ func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	logID := g.Cfg.LogID
 
 	MassifHeight := uint8(3)
-	committer, err := committer.NewMassifCommitter(committer.Options{
+	committer, err := committer.NewMassifCommitter(storage.Options{
 		MassifHeight: MassifHeight,
 		LogID:        logID,
 		Store:        tc.Storer,
@@ -565,7 +565,7 @@ func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	require.Nil(t, err)
 
 	// this fails
-	massifReader, err := azstorage.NewObjectReader(azstorage.Options{MassifHeight: MassifHeight, LogID: logID, Store: tc.Storer})
+	massifReader, err := storage.NewObjectReader(storage.Options{MassifHeight: MassifHeight, LogID: logID, Store: tc.Storer})
 	require.NoError(t, err)
 	mc3, err := massifReader.GetMassifContext(ctx, 3)
 	require.NoError(t, err)
@@ -578,7 +578,7 @@ func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	iBaseLeafNode45 := iPeakNode45 - mmr.IndexHeight(iPeakNode45)
 	iLeaf45 := mmr.LeafCount(iBaseLeafNode45)
 
-	hsz := mmr.HeightSize(uint64(committer.Options.MassifHeight))
+	hsz := mmr.HeightSize(uint64(committer.Opts.MassifHeight))
 	hlc := (hsz + 1) / 2
 	mi30 := uint32(iLeaf30 / hlc)
 	mcPeakNode30, err := massifReader.GetMassifContext(ctx, mi30)
