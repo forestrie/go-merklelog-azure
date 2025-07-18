@@ -10,11 +10,13 @@ import (
 
 	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
+	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/datatrails/go-datatrails-merklelog/mmr"
 	"github.com/robinbryce/go-merklelog-azure/committer"
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
-	"github.com/robinbryce/go-merklelog-azure/mmrtesting"
-	"github.com/robinbryce/go-merklelog-azure/storage"
+	azmmrtesting "github.com/robinbryce/go-merklelog-azure/mmrtesting"
+	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
+	"github.com/robinbryce/go-merklelog-testing/mmrtesting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -108,11 +110,8 @@ func TestPeakStack_popArithmetic(t *testing.T) {
 
 func TestPeakStack_StartNextMassif(t *testing.T) {
 	var err error
-	cfg := mmrtesting.NewDefaultTestConfig("TestPeakStack_StartNextMassif")
-	tc := mmrtesting.NewTestContext(t, cfg)
-	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
-
-	logID := g.Cfg.LogID
+	tc := azmmrtesting.NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestPeakStack_StartNextMassif"))
+	logID := tc.Cfg.LogID
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
 	massifHeight := uint8(2) // each masif has 2 leaves and 3 nodes + spur
@@ -223,7 +222,7 @@ func TestPeakStack_StartNextMassif(t *testing.T) {
 	// | [0, 0] || 0 | 1 | 2 |
 	// +--------++---+-------+
 	//
-	mc.Data = g.PadWithNumberedLeaves(mc.Data, 0, 1<<massifHeight-1)
+	mc.Data = tc.PadWithNumberedLeaves(mc.Data, 0, 1<<massifHeight-1)
 
 	var peakStack []byte
 
@@ -298,7 +297,7 @@ func TestPeakStack_StartNextMassif(t *testing.T) {
 
 	// fill massif 1, noting that there is a single extra node above the tree line
 	// mc.Data = tc.padWithLeafEntries(mc.Data, 1<<MassifHeight-1+1)
-	mc.Data = g.PadWithNumberedLeaves(mc.Data, int(mc.Start.FirstIndex), 1<<massifHeight-1+1)
+	mc.Data = tc.PadWithNumberedLeaves(mc.Data, int(mc.Start.FirstIndex), 1<<massifHeight-1+1)
 
 	// --- massif 2
 
@@ -356,7 +355,7 @@ func TestPeakStack_StartNextMassif(t *testing.T) {
 
 	// fill massif 2, noting that this time, unlike for massif 1, there are no nodes above the tree line
 	// mc.Data = tc.padWithLeafEntries(mc.Data, 1<<MassifHeight-1)
-	mc.Data = g.PadWithNumberedLeaves(mc.Data, int(mc.Start.FirstIndex), 1<<massifHeight-1)
+	mc.Data = tc.PadWithNumberedLeaves(mc.Data, int(mc.Start.FirstIndex), 1<<massifHeight-1)
 
 	// --- massif 3
 
@@ -419,7 +418,7 @@ func TestPeakStack_StartNextMassif(t *testing.T) {
 
 	// fill massif 3, noting that this time, as we hit a perfect power of two mmr size we gain a whole MMR tree level
 	// mc.Data = tc.padWithLeafEntries(mc.Data, 1<<MassifHeight-1+2)
-	mc.Data = g.PadWithNumberedLeaves(mc.Data, int(mc.Start.FirstIndex), 1<<massifHeight-1+2)
+	mc.Data = tc.PadWithNumberedLeaves(mc.Data, int(mc.Start.FirstIndex), 1<<massifHeight-1+2)
 
 	// --- massif 4
 	//
@@ -487,20 +486,20 @@ func TestPeakStack_StartNextMassif(t *testing.T) {
 
 	// fill massif 4, noting that this time, as we hit a perfect power of two mmr size we gain a whole MMR tree level
 	// mc.Data = tc.padWithLeafEntries(mc.Data, 1<<MassifHeight-1)
-	mc.Data = g.PadWithNumberedLeaves(mc.Data, int(mc.Start.FirstIndex), 1<<massifHeight-1)
+	mc.Data = tc.PadWithNumberedLeaves(mc.Data, int(mc.Start.FirstIndex), 1<<massifHeight-1)
 }
 
 func commitLeaves(
-	ctx context.Context, tc *mmrtesting.TestContext, g *mmrtesting.TestGenerator,
-	committer *committer.MassifCommitter,
+	ctx context.Context, tc *azmmrtesting.TestContext,
+	committer storage.MassifCommitter,
 	count uint64,
 ) error {
 	if count <= 0 {
 		return nil
 	}
-	mc, err := committer.GetCurrentContext(ctx)
+	mc, err := committer.GetAppendContext(ctx)
 	require.NoError(tc.T, err)
-	batch := g.GenerateNumberedLeafBatch(g.Cfg.LogID, 0, count)
+	batch := tc.GenerateNumberedLeafBatch(tc.Cfg.LogID, 0, count)
 
 	for _, args := range batch {
 
@@ -511,7 +510,7 @@ func commitLeaves(
 			if err != nil {
 				return err
 			}
-			mc, err = committer.GetCurrentContext(ctx)
+			mc, err = committer.GetAppendContext(ctx)
 			if err != nil {
 				return err
 			}
@@ -529,11 +528,15 @@ func commitLeaves(
 			return err
 		}
 	}
-
-	_, err = committer.GetCurrentContext(ctx)
+	err = committer.CommitContext(ctx, mc)
 	if err != nil {
 		return err
 	}
+
+	// _, err = committer.GetAppendContext(ctx)
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
@@ -542,13 +545,11 @@ func commitLeaves(
 func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	logger.New("INFO")
 	ctx := t.Context()
-	cfg := mmrtesting.NewDefaultTestConfig("TestPeakStack_Height4Massif2to3Size63")
-	tc := mmrtesting.NewTestContext(t, cfg)
-	g := mmrtesting.NewTestGenerator(t, cfg, mmrtesting.MMRTestingGenerateNumberedLeaf)
-	logID := g.Cfg.LogID
+	tc := azmmrtesting.NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestPeakStack_Height4Massif2to3Size63"))
+	logID := tc.Cfg.LogID
 
-	MassifHeight := uint8(3)
-	committer, err := committer.NewMassifCommitter(storage.Options{
+	MassifHeight := uint8(4)
+	committer, err := committer.NewMassifCommitter(azstorage.Options{
 		MassifHeight: MassifHeight,
 		LogID:        logID,
 		Store:        tc.Storer,
@@ -561,13 +562,15 @@ func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	mmrSizeB := uint64(63)
 	nLeaves := mmr.LeafCount(mmrSizeB)
 
-	err = commitLeaves(ctx, tc, &g, committer, nLeaves)
+	err = commitLeaves(ctx, tc, committer, nLeaves)
 	require.Nil(t, err)
 
 	// this fails
-	massifReader, err := storage.NewObjectReader(storage.Options{MassifHeight: MassifHeight, LogID: logID, Store: tc.Storer})
+	massifReader, err := azstorage.NewObjectReader(azstorage.Options{MassifHeight: MassifHeight, LogID: logID, Store: tc.Storer})
 	require.NoError(t, err)
 	mc3, err := massifReader.GetMassifContext(ctx, 3)
+	require.NoError(t, err)
+	err = mc3.CreatePeakStackMap()
 	require.NoError(t, err)
 
 	iPeakNode30 := uint64(30)
@@ -634,6 +637,9 @@ func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 
 	assert.True(t, bytes.Equal(peakNode30, mc3StackedPeakNode30))
 	assert.True(t, bytes.Equal(peakNode45, mc3StackedPeakNode45))
+
+	err = mc3.CreatePeakStackMap()
+	require.NoError(t, err)
 
 	assert.Equal(t, mc3.PeakStackMap[iPeakNode30], iStack30)
 	assert.Equal(t, mc3.PeakStackMap[iPeakNode45], iStack45)

@@ -33,7 +33,7 @@ func (c *MassifCommitter) Init(opts azstorage.Options) error {
 	return nil
 }
 
-func (c *MassifCommitter) GetCurrentContext(
+func (c *MassifCommitter) GetAppendContext(
 	ctx context.Context,
 ) (*massifs.MassifContext, error) {
 	// There are 3 states to consider here
@@ -123,7 +123,7 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifC
 	// "bury", the previous massif's nodes.
 
 	// leaves that the height (not the height index) allows for.
-	maxLeafIndex := ((mmr.HeightSize(uint64(mc.Start.MassifHeight)) + 1) >> 1) * uint64(mc.Start.MassifIndex + 1) - 1
+	maxLeafIndex := ((mmr.HeightSize(uint64(mc.Start.MassifHeight))+1)>>1)*uint64(mc.Start.MassifIndex+1) - 1
 	spurHeight := mmr.SpurHeightLeaf(maxLeafIndex)
 	// The overall size of the massif that contains that many leaves.
 	maxMMRSize := mmr.MMRIndex(maxLeafIndex) + spurHeight + 1
@@ -188,8 +188,7 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifC
 	// az.ContentLength = wr.Size
 	az.ContentLength = int64(len(mc.Data))
 
-	c.Data[mc.Start.MassifIndex] = az.Data
-	c.Starts[mc.Start.MassifIndex] = mc.Start
+	c.Starts[mc.Start.MassifIndex] = &mc.Start
 	if mc.Start.MassifIndex > c.LastMassifIndex {
 		c.LastMassifIndex = mc.Start.MassifIndex
 	}

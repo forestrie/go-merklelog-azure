@@ -9,64 +9,77 @@ import (
 
 	"github.com/datatrails/go-datatrails-common/azblob"
 	"github.com/datatrails/go-datatrails-common/logger"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/robinbryce/go-merklelog-testing/mmrtesting"
 	"github.com/stretchr/testify/require"
 )
 
 type TestContext struct {
+	mmrtesting.TestGenerator
+	Cfg    *TestOptions
 	Log    logger.Logger
 	Storer *azblob.Storer
-	T      *testing.T
-	Cfg    *TestConfig
 }
 
-type TestConfig struct {
-	// We seed the RNG of the provided StartTimeMS. It is normal to force it to
-	// some fixed value so that the generated data is the same from run to run.
-	StartTimeMS     int64
-	EventRate       int
-	TestLabelPrefix string
-	LogID           storage.LogID // can be nil, defaults to TestLabelPrefix
-	Container       string        // can be "" defaults to TestLablePrefix
-	DebugLevel      string        // defaults to INFO
+type TestOptions struct {
+	mmrtesting.TestOptions
+	Container  string // can be "" defaults to TestLablePrefix
+	DebugLevel string // defaults to INFO
 }
 
-func NewDefaultTestConfig(testLabelPrefix string) *TestConfig {
-	return &TestConfig{
-		StartTimeMS: (1698342521) * 1000, EventRate: 500,
-		TestLabelPrefix: testLabelPrefix,
-		LogID:           nil,
-		Container:       strings.ReplaceAll(strings.ToLower(testLabelPrefix), "_", ""),
+func WithContainer(container string) mmrtesting.Option {
+	return func(o any) {
+		options, ok := o.(*TestOptions)
+		if !ok {
+			return
+		}
+		options.Container = container
 	}
 }
 
-func NewTestContext(t *testing.T, cfg *TestConfig) *TestContext {
-	c := TestContext{
-		T:   t,
-		Cfg: cfg,
+func NewDefaultTestContext(t *testing.T, opts ...mmrtesting.Option) *TestContext {
+	opts = append([]mmrtesting.Option{mmrtesting.WithDefaults()}, opts...)
+	return NewTestContext(t, nil, nil, opts...)
+}
+
+func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...mmrtesting.Option) *TestContext {
+
+	if cfg == nil {
+		cfg = &TestOptions{}
 	}
+	for _, opt := range opts {
+		opt(&cfg.TestOptions)
+		opt(cfg)
+	}
+
 	logLevel := cfg.DebugLevel
 	if logLevel == "" {
 		logLevel = "NOOP"
+		cfg.DebugLevel = logLevel
 	}
 	logger.New(logLevel)
-	c.Log = logger.Sugar.WithServiceName(cfg.TestLabelPrefix)
 
-	container := cfg.Container
-	if container == "" {
-		container = cfg.TestLabelPrefix
+	if c == nil {
+		c = &TestContext{
+			Cfg: cfg,
+		}
+	}
+	c.TestGenerator.Init(t, &cfg.TestOptions)
+
+	c.Log = logger.Sugar.WithServiceName(cfg.TestOptions.TestLabelPrefix)
+	if c.Cfg.Container == "" {
+		cfg.Container = strings.ReplaceAll(strings.ToLower(cfg.TestOptions.TestLabelPrefix), "_", "")
 	}
 
 	var err error
-	c.Storer, err = azblob.NewDev(azblob.NewDevConfigFromEnv(), container)
+	c.Storer, err = azblob.NewDev(azblob.NewDevConfigFromEnv(), cfg.Container)
 	if err != nil {
 		t.Fatalf("failed to connect to blob store emulator: %v", err)
 	}
 	client := c.Storer.GetServiceClient()
 	// Note: we expect a 'already exists' error here and  ignore it.
-	_, _ = client.CreateContainer(t.Context(), container, nil)
+	_, _ = client.CreateContainer(t.Context(), cfg.Container, nil)
 
-	return &c
+	return c
 }
 
 func (c *TestContext) GetLog() logger.Logger { return c.Log }

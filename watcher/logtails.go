@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/robinbryce/go-merklelog-azure/blobschema"
+	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
 	"github.com/robinbryce/go-merklelog-azure/committer"
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
 )
@@ -51,11 +51,11 @@ func NewLogTail(path string) (LogTail, error) {
 // replaces the values on the current tail with those parsed from other and
 // returns true.  Returns false if other is older than the tail.
 func (l *LogTail) TryReplacePath(path string) bool {
-	if l.Ext == blobschema.V1MMRMassifExt && !datatrails.IsMassifPathLike(path) {
+	if l.Ext == storageschema.V1MMRMassifExt && !datatrails.IsMassifPathLike(path) {
 		return false
 	}
 
-	if l.Ext == blobschema.V1MMRSealSignedRootExt && !datatrails.IsSealPathLike(path) {
+	if l.Ext == storageschema.V1MMRSealSignedRootExt && !datatrails.IsSealPathLike(path) {
 		return false
 	}
 
@@ -171,7 +171,7 @@ func (c *LogTailCollator) collectPageItem(it *azblob.FilterBlobItem) error {
 	// if it is missing, it will be the empty string that is set
 	lastid := committer.GetLastIDHex(collectTags(it.Tags))
 
-	if lt.Ext == blobschema.V1MMRMassifExt {
+	if lt.Ext == storageschema.V1MMRMassifExt {
 		cur, ok := c.Massifs[lt.Tenant]
 		if !ok {
 			lt.LastID = lastid
