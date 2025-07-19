@@ -6,7 +6,7 @@ replace (
 	github.com/datatrails/go-datatrails-common => ../go-datatrails-common
 	github.com/datatrails/go-datatrails-merklelog/massifs => ../go-datatrails-merklelog/massifs
 	github.com/datatrails/go-datatrails-merklelog/mmr => ../go-datatrails-merklelog/mmr
-	github.com/robinbryce/go-merklelog-testing => ../go-merklelog-testing
+	github.com/robinbryce/go-merklelog-provider-testing => ../go-merklelog-provider-testing
 )
 
 require (
@@ -14,7 +14,7 @@ require (
 	github.com/datatrails/go-datatrails-common v0.30.0
 	github.com/datatrails/go-datatrails-merklelog/massifs v0.0.0-00010101000000-000000000000
 	github.com/datatrails/go-datatrails-merklelog/mmr v0.4.0
-	github.com/robinbryce/go-merklelog-testing v0.0.0-00010101000000-000000000000
+	github.com/robinbryce/go-merklelog-provider-testing v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.10.0
 )
 

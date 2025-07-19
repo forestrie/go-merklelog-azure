@@ -6,8 +6,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
-	"github.com/robinbryce/go-merklelog-azure/committer"
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
+	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
 )
 
 // LogTail records the newest (highest numbered) massif path in a log It is used
@@ -169,7 +169,7 @@ func (c *LogTailCollator) collectPageItem(it *azblob.FilterBlobItem) error {
 		return err
 	}
 	// if it is missing, it will be the empty string that is set
-	lastid := committer.GetLastIDHex(collectTags(it.Tags))
+	lastid := azstorage.GetLastIDHex(collectTags(it.Tags))
 
 	if lt.Ext == storageschema.V1MMRMassifExt {
 		cur, ok := c.Massifs[lt.Tenant]

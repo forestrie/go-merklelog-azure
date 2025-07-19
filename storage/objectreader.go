@@ -12,26 +12,9 @@ import (
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
 )
 
-type pathProvider interface {
-	GetStoragePrefix(otype storage.ObjectType) (string, error)
-	GetObjectIndex(storagePath string, otype storage.ObjectType) (uint32, error)
-	GetStoragePath(massifIndex uint32, otype storage.ObjectType) string
-}
-
-type storageProvider interface {
-	storage.ObjectReader
-	storage.ObjectExtents
-	storage.ObjectNatives
-	storage.ObjectIndexer
-}
-
 type Options struct {
-	LogID           storage.LogID
-	CommitmentEpoch uint8
-	MassifHeight    uint8
-	CBORCodec       *commoncbor.CBORCodec
-	PathProvider    pathProvider
-	Store           azureBlobs // This is the native interface for the storage provider, Azure Blob Storage
+	storage.Options
+	Store azureBlobs // This is the native interface for the storage provider, Azure Blob Storage
 }
 
 type NativeContexts struct {

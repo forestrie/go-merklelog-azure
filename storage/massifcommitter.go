@@ -1,4 +1,4 @@
-package committer
+package storage
 
 import (
 	"context"
@@ -11,14 +11,13 @@ import (
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/datatrails/go-datatrails-merklelog/mmr"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
-	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
 )
 
 type MassifCommitter struct {
-	azstorage.ObjectReader
+	ObjectReader
 }
 
-func NewMassifCommitter(opts azstorage.Options) (*MassifCommitter, error) {
+func NewMassifCommitter(opts Options) (*MassifCommitter, error) {
 	c := &MassifCommitter{}
 	if err := c.Init(opts); err != nil {
 		return nil, err
@@ -26,7 +25,7 @@ func NewMassifCommitter(opts azstorage.Options) (*MassifCommitter, error) {
 	return c, nil
 }
 
-func (c *MassifCommitter) Init(opts azstorage.Options) error {
+func (c *MassifCommitter) Init(opts Options) error {
 	if err := c.ObjectReader.Init(opts); err != nil {
 		return err
 	}
@@ -192,6 +191,8 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifC
 	if mc.Start.MassifIndex > c.LastMassifIndex {
 		c.LastMassifIndex = mc.Start.MassifIndex
 	}
+
+	mc.Creating = false
 
 	return err
 }

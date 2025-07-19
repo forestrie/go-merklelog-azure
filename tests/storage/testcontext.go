@@ -1,6 +1,4 @@
-// Package mmrtesting provides azurite based merklelog integration testing
-// facilities
-package mmrtesting
+package storage
 
 import (
 	"context"
@@ -8,8 +6,13 @@ import (
 	"testing"
 
 	"github.com/datatrails/go-datatrails-common/azblob"
+	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
 	"github.com/datatrails/go-datatrails-common/logger"
-	"github.com/robinbryce/go-merklelog-testing/mmrtesting"
+	"github.com/datatrails/go-datatrails-merklelog/massifs"
+	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/robinbryce/go-merklelog-azure/datatrails"
+	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
+	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,6 +43,26 @@ func NewDefaultTestContext(t *testing.T, opts ...mmrtesting.Option) *TestContext
 	opts = append([]mmrtesting.Option{mmrtesting.WithDefaults()}, opts...)
 	return NewTestContext(t, nil, nil, opts...)
 }
+
+// Satisfy the provider tests interface
+
+func (c *TestContext) GetTestCfg() mmrtesting.TestOptions {
+	return c.Cfg.TestOptions
+}
+
+func (c *TestContext) GetT() *testing.T {
+	return c.TestGenerator.T
+}
+
+func (c *TestContext) NewMassifCommitter(opts storage.Options) (storage.MassifCommitter, error) {
+	return c.NewNativeMassifCommitter(opts)
+}
+
+func (c *TestContext) NewMassifContextReader(opts storage.Options) (storage.MassifContextReader, error) {
+	return c.NewNativeMassifCommitter(opts)
+}
+
+// end interface implementation
 
 func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...mmrtesting.Option) *TestContext {
 
@@ -80,6 +103,26 @@ func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...mmrt
 	_, _ = client.CreateContainer(t.Context(), cfg.Container, nil)
 
 	return c
+}
+
+func (c *TestContext) NewNativeMassifCommitter(opts storage.Options) (*azstorage.MassifCommitter, error) {
+	var err error
+	if opts.CBORCodec == nil {
+		var codec commoncbor.CBORCodec
+		codec, err = massifs.NewCBORCodec()
+		if err != nil {
+			return nil, err
+		}
+		opts.CBORCodec = &codec
+	}
+	if opts.PathProvider == nil {
+		opts.PathProvider = datatrails.NewFixedPaths(opts.LogID)
+	}
+	azopts := azstorage.Options{
+		Options: opts,
+		Store:   c.Storer,
+	}
+	return azstorage.NewMassifCommitter(azopts)
 }
 
 func (c *TestContext) GetLog() logger.Logger { return c.Log }

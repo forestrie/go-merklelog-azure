@@ -1,6 +1,6 @@
 // Package committer defines the azure specific implementation for appending to
 // merklelogs
-package committer
+package storage
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package committer
+package storage
 
 import (
 	"encoding/binary"
