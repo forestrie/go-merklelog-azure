@@ -1,4 +1,4 @@
-// Package committer defines the azure specific implementation for appending to
+// Package storage defines the azure specific implementation for appending to
 // merklelogs
 package storage
 

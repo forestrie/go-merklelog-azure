@@ -2,10 +2,13 @@ package blobs
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"time"
 
+	azStorageBlob "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/datatrails/go-datatrails-common/azblob"
+	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 )
 
 // LogBlobContext provides a common context for reading & writing log blobs
@@ -44,10 +47,7 @@ func (lc *LogBlobContext) ReadData(
 	var rr *azblob.ReaderResponse
 
 	rr, lc.Data, err = BlobRead(ctx, lc.BlobPath, store, opts...)
-	if err != nil {
-		return err
-	}
-	return lc.processResponse(rr)
+	return lc.processResponse(rr, err)
 }
 
 func (lc *LogBlobContext) ReadDataN(
@@ -57,16 +57,32 @@ func (lc *LogBlobContext) ReadDataN(
 	var rr *azblob.ReaderResponse
 
 	rr, lc.Data, err = BlobReadN(ctx, readNMax, lc.BlobPath, store, opts...)
+	return lc.processResponse(rr, err)
+}
+
+func (lc *LogBlobContext) processResponse(rr *azblob.ReaderResponse, err error) error {
+
+	if rr == nil {
+		return err
+	}
+
+	if err != nil {
+		switch azStorageBlob.StorageErrorCode(rr.XMsErrorCode) {
+		case azStorageBlob.StorageErrorCodeBlobNotFound:
+			return fmt.Errorf("%w: %s", storage.ErrDoesNotExist, rr.XMsErrorCode)
+		case azStorageBlob.StorageErrorCodeContainerNotFound:
+			return fmt.Errorf("%w: %s", storage.ErrDoesNotExist, rr.XMsErrorCode)
+		case azStorageBlob.StorageErrorCodeResourceNotFound:
+			return fmt.Errorf("%w: %s", storage.ErrDoesNotExist, rr.XMsErrorCode)
+		default:
+			return err
+		}
+	}
+
 	if err != nil {
 		return err
 	}
-	return lc.processResponse(rr)
-}
 
-func (lc *LogBlobContext) processResponse(rr *azblob.ReaderResponse) error {
-	if rr == nil {
-		return nil
-	}
 	lc.Tags = rr.Tags
 
 	if rr.ETag != nil {
@@ -79,5 +95,5 @@ func (lc *LogBlobContext) processResponse(rr *azblob.ReaderResponse) error {
 
 	lc.LastRead = time.Now()
 	lc.ContentLength = rr.ContentLength
-	return nil
+	return err
 }

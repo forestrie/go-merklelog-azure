@@ -7,13 +7,7 @@ import (
 	"github.com/datatrails/go-datatrails-common/azblob"
 )
 
-type azureBlobs interface {
-	Put(
-		ctx context.Context,
-		blobPath string,
-		source io.ReadSeekCloser,
-		opts ...azblob.Option,
-	) (*azblob.WriteResponse, error)
+type azureReader interface {
 	Reader(
 		ctx context.Context,
 		blobpath string,
@@ -22,4 +16,18 @@ type azureBlobs interface {
 
 	FilteredList(ctx context.Context, tagsFilter string, opts ...azblob.Option) (*azblob.FilterResponse, error)
 	List(ctx context.Context, opts ...azblob.Option) (*azblob.ListerResponse, error)
+}
+
+type azureWriter interface {
+	Put(
+		ctx context.Context,
+		blobPath string,
+		source io.ReadSeekCloser,
+		opts ...azblob.Option,
+	) (*azblob.WriteResponse, error)
+}
+
+type azureBlobs interface {
+	azureReader
+	azureWriter
 }

@@ -13,8 +13,9 @@ import (
 )
 
 type Options struct {
-	storage.Options
-	Store azureBlobs // This is the native interface for the storage provider, Azure Blob Storage
+	massifs.StorageOptions
+	Store       azureReader // This is the native interface for the storage provider, Azure Blob Storage
+	StoreWriter azureWriter
 }
 
 type NativeContexts struct {
@@ -57,7 +58,7 @@ func (r *ObjectReader) checkOptions() error {
 	}
 
 	if r.Opts.Store == nil {
-		return fmt.Errorf("store is required")
+		return fmt.Errorf("store reader is required")
 	}
 
 	if r.Opts.CommitmentEpoch == 0 {

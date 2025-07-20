@@ -6,6 +6,7 @@ replace (
 	github.com/datatrails/go-datatrails-common => ../go-datatrails-common
 	github.com/datatrails/go-datatrails-merklelog/massifs => ../go-datatrails-merklelog/massifs
 	github.com/datatrails/go-datatrails-merklelog/mmr => ../go-datatrails-merklelog/mmr
+	github.com/robinbryce/go-merklelog-azure => ../go-merklelog-azure
 	github.com/robinbryce/go-merklelog-provider-testing => ../go-merklelog-provider-testing
 )
 

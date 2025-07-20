@@ -29,6 +29,9 @@ func (c *MassifCommitter) Init(opts Options) error {
 	if err := c.ObjectReader.Init(opts); err != nil {
 		return err
 	}
+	if opts.StoreWriter == nil {
+		return fmt.Errorf("a writer is required for a committer")
+	}
 	return nil
 }
 
@@ -168,7 +171,7 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifC
 		opts = append(opts, azblob.WithEtagNoneMatch("*"))
 	}
 
-	wr, err := c.Opts.Store.Put(ctx, az.BlobPath, azblob.NewBytesReaderCloser(mc.Data),
+	wr, err := c.Opts.StoreWriter.Put(ctx, az.BlobPath, azblob.NewBytesReaderCloser(mc.Data),
 		opts...,
 	)
 	if err != nil {

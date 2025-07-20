@@ -17,7 +17,7 @@ func BlobRead(
 ) (*azblob.ReaderResponse, []byte, error) {
 	rr, err := store.Reader(ctx, blobPath, opts...)
 	if err != nil {
-		return nil, nil, err
+		return rr, nil, err
 	}
 
 	data := make([]byte, rr.ContentLength)
@@ -48,7 +48,7 @@ func BlobReadN(
 ) (*azblob.ReaderResponse, []byte, error) {
 	rr, err := store.Reader(ctx, blobPath, opts...)
 	if err != nil {
-		return nil, nil, err
+		return rr, nil, err
 	}
 
 	lenToRead := int64(min(readNMax, int(rr.ContentLength)))

@@ -9,7 +9,6 @@ import (
 	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
 	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
 	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
 	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
@@ -29,7 +28,7 @@ type TestOptions struct {
 	DebugLevel string // defaults to INFO
 }
 
-func WithContainer(container string) mmrtesting.Option {
+func WithContainer(container string) massifs.Option {
 	return func(o any) {
 		options, ok := o.(*TestOptions)
 		if !ok {
@@ -39,8 +38,8 @@ func WithContainer(container string) mmrtesting.Option {
 	}
 }
 
-func NewDefaultTestContext(t *testing.T, opts ...mmrtesting.Option) *TestContext {
-	opts = append([]mmrtesting.Option{mmrtesting.WithDefaults()}, opts...)
+func NewDefaultTestContext(t *testing.T, opts ...massifs.Option) *TestContext {
+	opts = append([]massifs.Option{mmrtesting.WithDefaults()}, opts...)
 	return NewTestContext(t, nil, nil, opts...)
 }
 
@@ -54,17 +53,17 @@ func (c *TestContext) GetT() *testing.T {
 	return c.TestGenerator.T
 }
 
-func (c *TestContext) NewMassifCommitter(opts storage.Options) (storage.MassifCommitter, error) {
+func (c *TestContext) NewMassifCommitter(opts massifs.StorageOptions) (massifs.MassifCommitter, error) {
 	return c.NewNativeMassifCommitter(opts)
 }
 
-func (c *TestContext) NewMassifContextReader(opts storage.Options) (storage.MassifContextReader, error) {
+func (c *TestContext) NewMassifContextReader(opts massifs.StorageOptions) (massifs.MassifContextReader, error) {
 	return c.NewNativeMassifCommitter(opts)
 }
 
 // end interface implementation
 
-func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...mmrtesting.Option) *TestContext {
+func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...massifs.Option) *TestContext {
 
 	if cfg == nil {
 		cfg = &TestOptions{}
@@ -105,7 +104,7 @@ func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...mmrt
 	return c
 }
 
-func (c *TestContext) NewNativeMassifCommitter(opts storage.Options) (*azstorage.MassifCommitter, error) {
+func (c *TestContext) NewNativeMassifCommitter(opts massifs.StorageOptions) (*azstorage.MassifCommitter, error) {
 	var err error
 	if opts.CBORCodec == nil {
 		var codec commoncbor.CBORCodec
@@ -119,8 +118,9 @@ func (c *TestContext) NewNativeMassifCommitter(opts storage.Options) (*azstorage
 		opts.PathProvider = datatrails.NewFixedPaths(opts.LogID)
 	}
 	azopts := azstorage.Options{
-		Options: opts,
-		Store:   c.Storer,
+		StorageOptions:     opts,
+		Store:       c.Storer,
+		StoreWriter: c.Storer,
 	}
 	return azstorage.NewMassifCommitter(azopts)
 }

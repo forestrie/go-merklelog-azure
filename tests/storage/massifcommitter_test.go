@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/datatrails/go-datatrails-common/logger"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/google/uuid"
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
 	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
@@ -35,7 +35,7 @@ func TestMassifCommitter_massifFirstContext(t *testing.T) {
 	firstBlobPath := fmt.Sprintf("v1/mmrs/tenant/%s/0/massifs/%016d.log", uuid.UUID(logID).String(), 0)
 	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
 
-	c, err := tc.NewNativeMassifCommitter(storage.Options{LogID: logID, MassifHeight: 3})
+	c, err := tc.NewNativeMassifCommitter(massifs.StorageOptions{LogID: logID, MassifHeight: 3})
 	if _, err = c.GetAppendContext(t.Context()); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
