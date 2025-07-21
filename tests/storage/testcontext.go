@@ -40,7 +40,7 @@ func WithContainer(container string) massifs.Option {
 
 func NewDefaultTestContext(t *testing.T, opts ...massifs.Option) *TestContext {
 	opts = append([]massifs.Option{mmrtesting.WithDefaults()}, opts...)
-	return NewTestContext(t, nil, nil, opts...)
+	return NewTestContext(t, nil, opts...)
 }
 
 // Satisfy the provider tests interface
@@ -63,7 +63,7 @@ func (c *TestContext) NewMassifContextReader(opts massifs.StorageOptions) (massi
 
 // end interface implementation
 
-func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...massifs.Option) *TestContext {
+func NewTestContext(t *testing.T, cfg *TestOptions, opts ...massifs.Option) *TestContext {
 
 	if cfg == nil {
 		cfg = &TestOptions{}
@@ -73,6 +73,17 @@ func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...mass
 		opt(cfg)
 	}
 
+	c := &TestContext{
+		Cfg: cfg,
+	}
+	c.Init(t, cfg)
+
+	c.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(c.Cfg.LogID))
+	return c
+}
+
+func (c *TestContext) Init(t *testing.T, cfg *TestOptions) {
+
 	logLevel := cfg.DebugLevel
 	if logLevel == "" {
 		logLevel = "NOOP"
@@ -80,12 +91,8 @@ func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...mass
 	}
 	logger.New(logLevel)
 
-	if c == nil {
-		c = &TestContext{
-			Cfg: cfg,
-		}
-	}
 	c.TestGenerator.Init(t, &cfg.TestOptions)
+	c.Cfg = cfg
 
 	c.Log = logger.Sugar.WithServiceName(cfg.TestOptions.TestLabelPrefix)
 	if c.Cfg.Container == "" {
@@ -100,8 +107,6 @@ func NewTestContext(t *testing.T, c *TestContext, cfg *TestOptions, opts ...mass
 	client := c.Storer.GetServiceClient()
 	// Note: we expect a 'already exists' error here and  ignore it.
 	_, _ = client.CreateContainer(t.Context(), cfg.Container, nil)
-
-	return c
 }
 
 func (c *TestContext) NewNativeMassifCommitter(opts massifs.StorageOptions) (*azstorage.MassifCommitter, error) {
@@ -118,9 +123,9 @@ func (c *TestContext) NewNativeMassifCommitter(opts massifs.StorageOptions) (*az
 		opts.PathProvider = datatrails.NewFixedPaths(opts.LogID)
 	}
 	azopts := azstorage.Options{
-		StorageOptions:     opts,
-		Store:       c.Storer,
-		StoreWriter: c.Storer,
+		StorageOptions: opts,
+		Store:          c.Storer,
+		StoreWriter:    c.Storer,
 	}
 	return azstorage.NewMassifCommitter(azopts)
 }

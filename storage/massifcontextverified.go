@@ -9,7 +9,9 @@ import (
 )
 
 func (r *ObjectReader) GetHeadContextVerified(ctx context.Context, opts ...massifs.Option) (*massifs.VerifiedContext, error) {
-	massifIndex, err := r.HeadIndex(ctx, storage.ObjectMassifData)
+
+	// Note: we get the last *checkpoint*, the log will be ahead of the seal if its busy, and possibly more than one massif.
+	massifIndex, err := r.HeadIndex(ctx, storage.ObjectCheckpoint)
 	if err != nil {
 		return nil, err
 	}
