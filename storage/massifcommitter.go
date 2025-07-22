@@ -19,6 +19,8 @@ type MassifCommitter struct {
 
 func NewMassifCommitter(opts Options) (*MassifCommitter, error) {
 	c := &MassifCommitter{}
+	// because of how we deal with starting a new massif, we defer the creation of the peak stack map.
+	opts.ExplicitPeakIndexMap = true
 	if err := c.Init(opts); err != nil {
 		return nil, err
 	}
@@ -91,6 +93,11 @@ func (c *MassifCommitter) GetAppendContext(
 	sz := massifs.TreeSize(mc.Start.MassifHeight)
 	start := mc.LogStart()
 	if uint64(len(mc.Data))-start < sz {
+		// ok, we have the massif we want, go ahead and create the peak stack map if we need to
+		// TODO: sequencers don't need this, but everyone else does.
+		if err = mc.CreatePeakStackMap(); err != nil {
+			return nil, fmt.Errorf("committer failed to create peak stack map (existing massif): %w", err)
+		}
 		return mc, nil
 	}
 
@@ -106,6 +113,9 @@ func (c *MassifCommitter) GetAppendContext(
 	err = mcnew.StartNextMassif()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start next massif: %w", err)
+	}
+	if err = mc.CreatePeakStackMap(); err != nil {
+		return nil, fmt.Errorf("committer failed to create peak stack map (new massif): %w", err)
 	}
 
 	aznew.BlobPath = c.Opts.PathProvider.GetStoragePath(mcnew.Start.MassifIndex, storage.ObjectMassifData)
@@ -223,6 +233,15 @@ func (c *MassifCommitter) createFirstMassifContext() (*massifs.MassifContext, er
 		// epoch, massifIndex and firstIndex are zero and prev root is 32 bytes of zero
 		Start: start,
 	}
+
+	// A sequencer in the process of appending nodes can avoid needing the mapping. Everyone else needs it.
+	// This detail will go away if we switch to fixed allocation of the peak stack space
+	if !c.Opts.ExplicitPeakIndexMap {
+		if err := mc.CreatePeakStackMap(); err != nil {
+			return nil, fmt.Errorf("failed to auto create peak stack map: %w", err)
+		}
+	}
+
 	// We pre-allocate and zero-fill the index, see the commentary in StartNextMassif
 	az.Data = append(data, mc.InitIndexData()...)
 	mc.Data = az.Data

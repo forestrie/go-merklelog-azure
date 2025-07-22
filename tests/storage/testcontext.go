@@ -77,8 +77,6 @@ func NewTestContext(t *testing.T, cfg *TestOptions, opts ...massifs.Option) *Tes
 		Cfg: cfg,
 	}
 	c.Init(t, cfg)
-
-	c.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(c.Cfg.LogID))
 	return c
 }
 
@@ -107,26 +105,45 @@ func (c *TestContext) Init(t *testing.T, cfg *TestOptions) {
 	client := c.Storer.GetServiceClient()
 	// Note: we expect a 'already exists' error here and  ignore it.
 	_, _ = client.CreateContainer(t.Context(), cfg.Container, nil)
+	c.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(c.Cfg.LogID))
 }
 
-func (c *TestContext) NewNativeMassifCommitter(opts massifs.StorageOptions) (*azstorage.MassifCommitter, error) {
+func (c *TestContext) AzDefaultOpts(opts massifs.StorageOptions) azstorage.Options {
+
 	var err error
+
+	if opts.LogID == nil {
+		opts.LogID = c.Cfg.LogID
+	}
+	if opts.MassifHeight == 0 {
+		opts.MassifHeight = c.Cfg.TestOptions.MassifHeight
+	}
+	if opts.CommitmentEpoch == 0 {
+		opts.CommitmentEpoch = c.Cfg.TestOptions.CommitmentEpoch
+	}
 	if opts.CBORCodec == nil {
 		var codec commoncbor.CBORCodec
 		codec, err = massifs.NewCBORCodec()
-		if err != nil {
-			return nil, err
-		}
+		require.NoError(c.T, err)
 		opts.CBORCodec = &codec
 	}
 	if opts.PathProvider == nil {
 		opts.PathProvider = datatrails.NewFixedPaths(opts.LogID)
 	}
-	azopts := azstorage.Options{
+	return azstorage.Options{
 		StorageOptions: opts,
 		Store:          c.Storer,
 		StoreWriter:    c.Storer,
 	}
+}
+
+func (c *TestContext) NewNativeObjectReader(opts massifs.StorageOptions) (*azstorage.ObjectReader, error) {
+	azopts := c.AzDefaultOpts(opts)
+	return azstorage.NewObjectReader(azopts)
+}
+
+func (c *TestContext) NewNativeMassifCommitter(opts massifs.StorageOptions) (*azstorage.MassifCommitter, error) {
+	azopts := c.AzDefaultOpts(opts)
 	return azstorage.NewMassifCommitter(azopts)
 }
 

@@ -21,16 +21,16 @@ func TenantID2LogID(storagePath string) storage.LogID {
 	if i == -1 {
 		return nil
 	}
-	j = strings.Index(storagePath[i:], "/")
+	j = strings.Index(storagePath[i+len("tenant/"):], "/")
 	if j == -1 {
-		j = len(storagePath) - 1
+		j = len(storagePath)
 	}
 	tenantUUID := storagePath[i+len("tenant/") : j]
 	logID, err := uuid.Parse(tenantUUID)
 	if err != nil {
 		return nil
 	}
-	return storage.LogID(logID.NodeID())
+	return storage.LogID(logID[:])
 }
 
 // IdentifyLogTenantID identifies the log storage path by the presence of a datatrails tenant id string.

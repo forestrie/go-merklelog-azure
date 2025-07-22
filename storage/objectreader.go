@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -14,13 +15,25 @@ import (
 
 type Options struct {
 	massifs.StorageOptions
-	Store       azureReader // This is the native interface for the storage provider, Azure Blob Storage
-	StoreWriter azureWriter
+	Store                azureReader // This is the native interface for the storage provider, Azure Blob Storage
+	StoreWriter          azureWriter
+	ExplicitPeakIndexMap bool // If true, the peak map is not constituted automatically when getting a massif context.
 }
 
 type NativeContexts struct {
 	Massifs     map[uint32]*blobs.LogBlobContext
 	Checkpoints map[uint32]*blobs.LogBlobContext
+}
+
+type LogCache struct {
+	PathProvider        storage.PathProvider
+	LastMassifIndex     uint32 // The last massif index read, used for lazy loading
+	LastCheckpointIndex uint32 // The last checkpoint index read, used for lazy loading
+
+	Starts      map[uint32]*massifs.MassifStart // Cache for massif starts
+	Checkpoints map[uint32]*massifs.Checkpoint  // Cache for checkpoints
+
+	Az NativeContexts
 }
 
 type ObjectReader struct {
@@ -32,7 +45,8 @@ type ObjectReader struct {
 	Starts      map[uint32]*massifs.MassifStart // Cache for massif starts
 	Checkpoints map[uint32]*massifs.Checkpoint  // Cache for checkpoints
 
-	Az NativeContexts
+	Az       NativeContexts
+	LogCache map[string]*LogCache
 }
 
 func NewObjectReader(opts Options) (*ObjectReader, error) {
@@ -41,6 +55,10 @@ func NewObjectReader(opts Options) (*ObjectReader, error) {
 		return nil, err
 	}
 	return &r, nil
+}
+
+func (r *ObjectReader) GetStorageOptions() massifs.StorageOptions {
+	return r.Opts.StorageOptions
 }
 
 func (r *ObjectReader) Init(opts Options) error {
@@ -53,9 +71,6 @@ func (r *ObjectReader) Init(opts Options) error {
 }
 
 func (r *ObjectReader) checkOptions() error {
-	if r.Opts.LogID == nil {
-		return fmt.Errorf("log id is required")
-	}
 
 	if r.Opts.Store == nil {
 		return fmt.Errorf("store reader is required")
@@ -68,7 +83,7 @@ func (r *ObjectReader) checkOptions() error {
 		r.Opts.MassifHeight = 14 // the height adopted by default for the datatrails ledger
 	}
 
-	if r.Opts.PathProvider == nil {
+	if r.Opts.PathProvider == nil && r.Opts.LogID != nil {
 		r.Opts.PathProvider = datatrails.NewFixedPaths(r.Opts.LogID)
 	}
 
@@ -90,11 +105,84 @@ func (r *ObjectReader) reset() {
 	r.Checkpoints = make(map[uint32]*massifs.Checkpoint)
 	r.Az.Massifs = make(map[uint32]*blobs.LogBlobContext)
 	r.Az.Checkpoints = make(map[uint32]*blobs.LogBlobContext)
+	r.LogCache = nil // lazily created
+	r.LastMassifIndex = 0
+	r.LastCheckpointIndex = 0
 }
 
 //
 // MassifReader interface implementation
 //
+
+// SelectLog
+//
+// Ideally, with this implementation, the access is for a single log at a time,
+// if random log access is a regular thing a more considered implementation
+// would do better.
+func (r *ObjectReader) SelectLog(logId storage.LogID, pathProvider storage.PathProvider) error {
+	if logId == nil {
+		return fmt.Errorf("logId cannot be nil")
+	}
+
+	if bytes.Equal(r.Opts.LogID, logId) {
+		return nil // already selected
+	}
+
+	// if we don't have a log cache, create one
+	if r.LogCache == nil {
+		r.LogCache = make(map[string]*LogCache)
+	}
+
+	var save *LogCache
+	var restore *LogCache
+
+	// are we restoring from a previous log?
+	if _, ok := r.LogCache[string(logId)]; ok {
+		restore = r.LogCache[string(logId)]
+	}
+
+	// do we have a current log to save ?
+	if r.Opts.LogID != nil {
+		if _, ok := r.LogCache[string(r.Opts.LogID)]; !ok {
+			r.LogCache[string(r.Opts.LogID)] = &LogCache{}
+		}
+		save = r.LogCache[string(r.Opts.LogID)]
+		save.PathProvider = r.Opts.PathProvider
+		save.LastMassifIndex = r.LastMassifIndex
+		save.LastCheckpointIndex = r.LastCheckpointIndex
+		save.Starts = r.Starts
+		save.Checkpoints = r.Checkpoints
+		save.Az.Massifs = r.Az.Massifs
+		save.Az.Checkpoints = r.Az.Checkpoints
+	}
+
+	// if we are restoring we can clobber the current state now we have dealt with the save.
+	if restore != nil {
+		r.Opts.PathProvider = restore.PathProvider
+		r.Starts = restore.Starts
+		r.Checkpoints = restore.Checkpoints
+		r.Az.Massifs = restore.Az.Massifs
+		r.Az.Checkpoints = restore.Az.Checkpoints
+		r.LastMassifIndex = restore.LastMassifIndex
+		r.LastCheckpointIndex = restore.LastCheckpointIndex
+	} else {
+		// The Opts are as they were when constructed.
+		r.Starts = make(map[uint32]*massifs.MassifStart)
+		r.Checkpoints = make(map[uint32]*massifs.Checkpoint)
+		r.Az.Massifs = make(map[uint32]*blobs.LogBlobContext)
+		r.Az.Checkpoints = make(map[uint32]*blobs.LogBlobContext)
+		r.LastMassifIndex = 0
+		r.LastCheckpointIndex = 0
+	}
+
+	// finally, we set the new log id
+	r.Opts.LogID = logId
+	if pathProvider != nil {
+		r.Opts.PathProvider = pathProvider
+	}
+
+	return nil
+}
 
 func (r *ObjectReader) GetMassifContext(ctx context.Context, massifIndex uint32) (*massifs.MassifContext, error) {
 	data, err := r.GetData(ctx, massifIndex)
@@ -112,6 +200,14 @@ func (r *ObjectReader) GetMassifContext(ctx context.Context, massifIndex uint32)
 			Data: data,
 		},
 		Start: *start,
+	}
+
+	// A sequencer in the process of appending nodes can avoid needing the mapping. Everyone else needs it.
+	// This detail will go away if we switch to fixed allocation of the peak stack space
+	if !r.Opts.ExplicitPeakIndexMap {
+		if err := mc.CreatePeakStackMap(); err != nil {
+			return nil, fmt.Errorf("failed to auto create peak stack map: %w", err)
+		}
 	}
 	return &mc, nil
 }
