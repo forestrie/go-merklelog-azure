@@ -128,7 +128,7 @@ func (c *TestContext) AzDefaultOpts(opts massifs.StorageOptions) azstorage.Optio
 		opts.CBORCodec = &codec
 	}
 	if opts.PathProvider == nil {
-		opts.PathProvider = datatrails.NewFixedPaths(opts.LogID)
+		opts.PathProvider = datatrails.NewPathProvider(opts.LogID)
 	}
 	return azstorage.Options{
 		StorageOptions: opts,

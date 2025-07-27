@@ -16,7 +16,7 @@ import (
 // The log is comprised of a series of numbered blobs. With one blob per
 // 'massif'. There are a few different types, and each type, due to how blob
 // listing works, is stored under a distinct prefix. All operations at the head
-// of the log, regardless of the specicic blob type, need a method to find the
+// of the log, regardless of the specific blob type, need a method to find the
 // last (most recently created) blob under a prefix
 type LogBlobContext struct {
 	BlobPath      string
@@ -39,7 +39,7 @@ func (lc *LogBlobContext) CopyTags() map[string]string {
 
 // ReadData reads the data from the blob at BlobPath
 // The various metadata fields are populated from the blob store response
-// On return, the Data member containes the blob contents
+// On return, the Data member contains the blob contents
 func (lc *LogBlobContext) ReadData(
 	ctx context.Context, store LogBlobReader, opts ...azblob.Option,
 ) error {
@@ -77,10 +77,6 @@ func (lc *LogBlobContext) processResponse(rr *azblob.ReaderResponse, err error) 
 		default:
 			return err
 		}
-	}
-
-	if err != nil {
-		return err
 	}
 
 	lc.Tags = rr.Tags

@@ -37,7 +37,7 @@ func TestMassifCommitter_massifFirstContext(t *testing.T) {
 	if _, err = c.GetAppendContext(t.Context()); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	assert.Equal(t, c.Az.Massifs[0].BlobPath, firstBlobPath)
+	assert.Equal(t, c.Selected.Az.Massifs[0].BlobPath, firstBlobPath)
 }
 
 func TestMassifCommitter_massifAddFirst(t *testing.T) {

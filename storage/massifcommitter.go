@@ -58,7 +58,7 @@ func (c *MassifCommitter) GetAppendContext(
 		return nil, err
 	}
 
-	az, ok := c.Az.Massifs[massifIndex]
+	az, ok := c.Selected.Az.Massifs[massifIndex]
 	if !ok {
 		return nil, fmt.Errorf("this is a bug in objectreader")
 	}
@@ -118,10 +118,13 @@ func (c *MassifCommitter) GetAppendContext(
 		return nil, fmt.Errorf("committer failed to create peak stack map (new massif): %w", err)
 	}
 
-	aznew.BlobPath = c.Opts.PathProvider.GetStoragePath(mcnew.Start.MassifIndex, storage.ObjectMassifData)
+	aznew.BlobPath, err = c.Opts.PathProvider.GetStoragePath(mcnew.Start.MassifIndex, storage.ObjectMassifData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get storage path for massif %d: %w", mcnew.Start.MassifIndex, err)
+	}
 	aznew.Tags[TagKeyFirstIndex] = fmt.Sprintf(TagFirstIndexFmt, mcnew.Start.FirstIndex)
 
-	c.Az.Massifs[mcnew.Start.MassifIndex] = &aznew
+	c.Selected.Az.Massifs[mcnew.Start.MassifIndex] = &aznew
 	return &mcnew, nil
 }
 
@@ -150,7 +153,7 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifC
 	}
 
 	// if we are commiting there must be an extended azure context
-	az, ok := c.Az.Massifs[mc.Start.MassifIndex]
+	az, ok := c.Selected.Az.Massifs[mc.Start.MassifIndex]
 	if !ok {
 		// in the Creating case, we should have initialized the tags and blob path when we populated the start for the new massif.
 		return fmt.Errorf("should be retained by read")
@@ -200,9 +203,9 @@ func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifC
 	// az.ContentLength = wr.Size
 	az.ContentLength = int64(len(mc.Data))
 
-	c.Starts[mc.Start.MassifIndex] = &mc.Start
-	if mc.Start.MassifIndex > c.LastMassifIndex {
-		c.LastMassifIndex = mc.Start.MassifIndex
+	c.Selected.Starts[mc.Start.MassifIndex] = &mc.Start
+	if mc.Start.MassifIndex > c.Selected.LastMassifIndex {
+		c.Selected.LastMassifIndex = mc.Start.MassifIndex
 	}
 
 	mc.Creating = false
@@ -221,8 +224,10 @@ func (c *MassifCommitter) createFirstMassifContext() (*massifs.MassifContext, er
 		return nil, err
 	}
 
-	storagePath := c.Opts.PathProvider.GetStoragePath(0, storage.ObjectMassifData)
-
+	storagePath,err := c.Opts.PathProvider.GetStoragePath(0, storage.ObjectMassifData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get storage path for first massif: %w", err)
+	}
 	az := &blobs.LogBlobContext{
 		BlobPath: storagePath,
 		Tags:     map[string]string{},
@@ -249,7 +254,7 @@ func (c *MassifCommitter) createFirstMassifContext() (*massifs.MassifContext, er
 	// mc.FirstIndex zero value is correct
 	SetFirstIndex(mc.Start.FirstIndex, az.Tags)
 
-	c.Az.Massifs[start.MassifIndex] = az
+	c.Selected.Az.Massifs[start.MassifIndex] = az
 
 	return mc, nil
 }
