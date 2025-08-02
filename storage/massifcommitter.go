@@ -17,18 +17,18 @@ type MassifCommitter struct {
 	ObjectReader
 }
 
-func NewMassifCommitter(opts Options) (*MassifCommitter, error) {
+func NewMassifCommitter(ctx context.Context, opts Options) (*MassifCommitter, error) {
 	c := &MassifCommitter{}
 	// because of how we deal with starting a new massif, we defer the creation of the peak stack map.
 	opts.ExplicitPeakIndexMap = true
-	if err := c.Init(opts); err != nil {
+	if err := c.Init(ctx, opts); err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (c *MassifCommitter) Init(opts Options) error {
-	if err := c.ObjectReader.Init(opts); err != nil {
+func (c *MassifCommitter) Init(ctx context.Context, opts Options) error {
+	if err := c.ObjectReader.Init(ctx, opts); err != nil {
 		return err
 	}
 	if opts.StoreWriter == nil {
@@ -224,7 +224,7 @@ func (c *MassifCommitter) createFirstMassifContext() (*massifs.MassifContext, er
 		return nil, err
 	}
 
-	storagePath,err := c.Opts.PathProvider.GetStoragePath(0, storage.ObjectMassifData)
+	storagePath, err := c.Opts.PathProvider.GetStoragePath(0, storage.ObjectMassifData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get storage path for first massif: %w", err)
 	}

@@ -2,8 +2,10 @@ package blobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
+	"net/http"
 	"time"
 
 	azStorageBlob "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
@@ -63,6 +65,22 @@ func (lc *LogBlobContext) ReadDataN(
 func (lc *LogBlobContext) processResponse(rr *azblob.ReaderResponse, err error) error {
 
 	if rr == nil {
+		var terr *azStorageBlob.StorageError
+		if errors.As(err, &terr) {
+			resp := terr.Response()
+			if resp.Body != nil {
+				defer resp.Body.Close()
+			}
+			switch resp.StatusCode {
+			case http.StatusNotFound:
+				return fmt.Errorf("%w: %v", storage.ErrDoesNotExist, err)
+			case http.StatusPreconditionFailed:
+				return fmt.Errorf("%w: %v", storage.ErrContentOC, err)
+			default:
+				return fmt.Errorf("unexpected status code %d: %v", resp.StatusCode, err)
+			}
+		}
+
 		return err
 	}
 
@@ -74,6 +92,10 @@ func (lc *LogBlobContext) processResponse(rr *azblob.ReaderResponse, err error) 
 			return fmt.Errorf("%w: %s", storage.ErrDoesNotExist, rr.XMsErrorCode)
 		case azStorageBlob.StorageErrorCodeResourceNotFound:
 			return fmt.Errorf("%w: %s", storage.ErrDoesNotExist, rr.XMsErrorCode)
+		case azStorageBlob.StorageErrorCodeConditionNotMet:
+			return fmt.Errorf("%w: %s", storage.ErrContentOC, rr.XMsErrorCode)
+		case azStorageBlob.StorageErrorCodeBlobAlreadyExists:
+			return fmt.Errorf("%w: %s", storage.ErrExistsOC, rr.XMsErrorCode)
 		default:
 			return err
 		}

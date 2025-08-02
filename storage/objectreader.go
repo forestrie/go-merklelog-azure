@@ -13,28 +13,12 @@ import (
 	"github.com/robinbryce/go-merklelog-azure/datatrails"
 )
 
+// TODO: split this into ReaderOptions, CommitterOptions, WriterOptions and PutterOptions
 type Options struct {
 	massifs.StorageOptions
 	Store                azureReader // This is the native interface for the storage provider, Azure Blob Storage
 	StoreWriter          azureWriter
 	ExplicitPeakIndexMap bool // If true, the peak map is not constituted automatically when getting a massif context.
-}
-
-type NativeContexts struct {
-	Massifs     map[uint32]*blobs.LogBlobContext
-	Checkpoints map[uint32]*blobs.LogBlobContext
-}
-
-type LogCache struct {
-	PathProvider        storage.PathProvider
-	LogID               storage.LogID // The log ID for this cache, used to restore the state
-	LastMassifIndex     uint32        // The last massif index read, used for lazy loading
-	LastCheckpointIndex uint32        // The last checkpoint index read, used for lazy loading
-
-	Starts      map[uint32]*massifs.MassifStart // Cache for massif starts
-	Checkpoints map[uint32]*massifs.Checkpoint  // Cache for checkpoints
-
-	Az NativeContexts
 }
 
 type ObjectReader struct {
@@ -44,9 +28,9 @@ type ObjectReader struct {
 	Selected *LogCache
 }
 
-func NewObjectReader(opts Options) (*ObjectReader, error) {
+func NewObjectReader(ctx context.Context, opts Options) (*ObjectReader, error) {
 	r := ObjectReader{}
-	if err := r.Init(opts); err != nil {
+	if err := r.Init(ctx, opts); err != nil {
 		return nil, err
 	}
 	return &r, nil
@@ -56,35 +40,22 @@ func (r *ObjectReader) GetStorageOptions() massifs.StorageOptions {
 	return r.Opts.StorageOptions
 }
 
-func (r *ObjectReader) Init(opts Options) error {
+func (r *ObjectReader) Init(ctx context.Context, opts Options) error {
 	r.Opts = opts
 	if err := r.checkOptions(); err != nil {
 		return err
 	}
 	r.reset()
 	if r.Opts.LogID != nil && r.Opts.PathProvider != nil {
-		if err := r.SelectLog(r.Opts.LogID, r.Opts.PathProvider); err != nil {
+		if err := r.SelectLog(ctx, r.Opts.LogID); err != nil {
 			return fmt.Errorf("failed to select log %s: %w", r.Opts.LogID, err)
 		}
 	}
 
 	return nil
 }
-func (r *ObjectReader) newLogCache(logID storage.LogID, pathProvider storage.PathProvider) *LogCache {
-
-	if pathProvider == nil {
-		pathProvider = r.Opts.PathProvider
-	}
-	return &LogCache{
-		PathProvider: pathProvider,
-		LogID:        logID,
-		Starts:       make(map[uint32]*massifs.MassifStart),
-		Checkpoints:  make(map[uint32]*massifs.Checkpoint),
-		Az: NativeContexts{
-			Massifs:     make(map[uint32]*blobs.LogBlobContext),
-			Checkpoints: make(map[uint32]*blobs.LogBlobContext),
-		},
-	}
+func (r *ObjectReader) newLogCache(logID storage.LogID) *LogCache {
+	return NewLogCache(r.Opts.PathProvider, logID)
 }
 
 func (r *ObjectReader) checkOptions() error {
@@ -139,7 +110,7 @@ func (r *ObjectReader) DropLog(logID storage.LogID) {
 // Ideally, with this implementation, the access is for a single log at a time,
 // if random log access is a regular thing a more considered implementation
 // would do better.
-func (r *ObjectReader) SelectLog(logId storage.LogID, pathProvider storage.PathProvider) error {
+func (r *ObjectReader) SelectLog(ctx context.Context, logId storage.LogID) error {
 	if logId == nil {
 		return fmt.Errorf("logId cannot be nil")
 	}
@@ -155,7 +126,7 @@ func (r *ObjectReader) SelectLog(logId storage.LogID, pathProvider storage.PathP
 
 	c, ok := r.LogCache[string(logId)]
 	if !ok {
-		c = r.newLogCache(logId, pathProvider)
+		c = r.newLogCache(logId)
 		r.LogCache[string(logId)] = c
 	}
 	r.Selected = c

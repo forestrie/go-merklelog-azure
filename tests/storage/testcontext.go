@@ -107,7 +107,6 @@ func (c *TestContext) Init(t *testing.T, cfg *TestOptions) {
 	_, _ = client.CreateContainer(t.Context(), cfg.Container, nil)
 	c.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(c.Cfg.LogID))
 }
-
 func (c *TestContext) AzDefaultOpts(opts massifs.StorageOptions) azstorage.Options {
 
 	var err error
@@ -139,12 +138,12 @@ func (c *TestContext) AzDefaultOpts(opts massifs.StorageOptions) azstorage.Optio
 
 func (c *TestContext) NewNativeObjectReader(opts massifs.StorageOptions) (*azstorage.ObjectReader, error) {
 	azopts := c.AzDefaultOpts(opts)
-	return azstorage.NewObjectReader(azopts)
+	return azstorage.NewObjectReader(context.Background(), azopts)
 }
 
 func (c *TestContext) NewNativeMassifCommitter(opts massifs.StorageOptions) (*azstorage.MassifCommitter, error) {
 	azopts := c.AzDefaultOpts(opts)
-	return azstorage.NewMassifCommitter(azopts)
+	return azstorage.NewMassifCommitter(context.Background(), azopts)
 }
 
 func (c *TestContext) GetLog() logger.Logger { return c.Log }
