@@ -33,6 +33,7 @@ var (
 )
 
 type WatchConfig struct {
+	Latest          bool
 	Since           time.Time
 	IDSince         string
 	Horizon         time.Duration
@@ -53,12 +54,20 @@ type Watcher struct {
 }
 
 func (w *Watcher) FirstFilter() string {
+	if w.Cfg.Latest {
+		idSince := massifs.IDTimestampToHex(0, 0)
+		return fmt.Sprintf(`"lastid">='%s'`, idSince)
+	}
 	w.LastSince = w.Cfg.Since
 	w.LastIDSince = w.Cfg.IDSince
 	return fmt.Sprintf(`"lastid">='%s'`, w.Cfg.IDSince)
 }
 
 func (w *Watcher) NextFilter() string {
+
+	if w.Cfg.Latest {
+		return w.FirstFilter()
+	}
 	if w.Cfg.Horizon == 0 {
 		return w.FirstFilter()
 	}
@@ -184,8 +193,8 @@ func WatchForChanges(
 }
 
 func ConfigDefaults(cfg *WatchConfig) error {
-	if cfg.Since.Equal(time.Time{}) && cfg.IDSince == "" && cfg.Horizon == 0 {
-		return fmt.Errorf("provide horizon on its own or either of the since parameters")
+	if !cfg.Latest && cfg.Since.Equal(time.Time{}) && cfg.IDSince == "" && cfg.Horizon == 0 {
+		return fmt.Errorf("provide the latest flag, horizon on its own or either of the since parameters")
 	}
 	// If horizon is provided, the since values are derived
 
