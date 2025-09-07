@@ -16,7 +16,7 @@ import (
 )
 
 type TestContext struct {
-	mmrtesting.TestGenerator
+	mmrtesting.TestContext[*TestContext, *TestContext]
 	Cfg    *TestOptions
 	Log    logger.Logger
 	Storer *azblob.Storer
@@ -24,8 +24,7 @@ type TestContext struct {
 
 type TestOptions struct {
 	mmrtesting.TestOptions
-	Container  string // can be "" defaults to TestLablePrefix
-	DebugLevel string // defaults to INFO
+	Container string // can be "" defaults to TestLabelPrefix
 }
 
 func WithContainer(container string) massifs.Option {
@@ -50,18 +49,52 @@ func (c *TestContext) GetTestCfg() mmrtesting.TestOptions {
 }
 
 func (c *TestContext) GetT() *testing.T {
-	return c.TestGenerator.T
+	return c.T
 }
 
-func (c *TestContext) NewMassifCommitter(opts massifs.StorageOptions) (massifs.MassifCommitter, error) {
-	return c.NewNativeMassifCommitter(opts)
+func (c *TestContext) NewMassifGetter(opts massifs.StorageOptions) (massifs.MassifContextGetter, error) {
+	azopts := c.AzDefaultOpts(opts)
+
+	store, err := azstorage.NewMassifStore(context.Background(), azopts)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
-func (c *TestContext) NewMassifContextReader(opts massifs.StorageOptions) (massifs.MassifContextReader, error) {
-	return c.NewNativeMassifCommitter(opts)
+func (c *TestContext) NewMassifCommitter(opts massifs.StorageOptions) (*massifs.MassifCommitter[massifs.HeadReplacer], error) {
+	azopts := c.AzDefaultOpts(opts)
+
+	store, err := azstorage.NewMassifStore(context.Background(), azopts)
+	if err != nil {
+		return nil, err
+	}
+	committer, err := azstorage.NewMassifCommitter(context.Background(), store, azopts)
+	if err != nil {
+		return nil, err
+	}
+
+	return committer, nil
 }
 
-// end interface implementation
+func (c *TestContext) NewMassifCommitterStore(opts massifs.StorageOptions) (*massifs.MassifCommitter[massifs.CommitterStore], error) {
+	azopts := c.AzDefaultOpts(opts)
+	store, err := azstorage.NewMassifStore(context.Background(), azopts)
+	if err != nil {
+		return nil, err
+	}
+	committer, err := azstorage.NewMassifCommitterStore(context.Background(), store, azopts)
+	if err != nil {
+		return nil, err
+	}
+
+	return committer, nil
+}
+
+func (c *TestContext) NewCommitterStore(opts massifs.StorageOptions) (massifs.CommitterStore, error) {
+	azopts := c.AzDefaultOpts(opts)
+	return azstorage.NewMassifStore(context.Background(), azopts)
+}
 
 func NewTestContext(t *testing.T, cfg *TestOptions, opts ...massifs.Option) *TestContext {
 
@@ -73,29 +106,25 @@ func NewTestContext(t *testing.T, cfg *TestOptions, opts ...massifs.Option) *Tes
 		opt(cfg)
 	}
 
-	c := &TestContext{
-		Cfg: cfg,
-	}
-	c.Init(t, cfg)
+	c := &TestContext{}
+	c.init(t, cfg)
 	return c
 }
 
-func (c *TestContext) Init(t *testing.T, cfg *TestOptions) {
+func (c *TestContext) init(t *testing.T, cfg *TestOptions) {
 
-	logLevel := cfg.DebugLevel
-	if logLevel == "" {
-		logLevel = "NOOP"
-		cfg.DebugLevel = logLevel
-	}
-	logger.New(logLevel)
+	cfg.EnsureDefaults(t)
 
-	c.TestGenerator.Init(t, &cfg.TestOptions)
 	c.Cfg = cfg
+	c.Emulator = c
+	c.Factory = c
 
-	c.Log = logger.Sugar.WithServiceName(cfg.TestOptions.TestLabelPrefix)
+	logger.New(c.Cfg.LogLevel)
+
 	if c.Cfg.Container == "" {
 		cfg.Container = strings.ReplaceAll(strings.ToLower(cfg.TestOptions.TestLabelPrefix), "_", "")
 	}
+	require.NotEmpty(t, cfg.Container, "we must have a container name")
 
 	var err error
 	c.Storer, err = azblob.NewDev(azblob.NewDevConfigFromEnv(), cfg.Container)
@@ -105,8 +134,13 @@ func (c *TestContext) Init(t *testing.T, cfg *TestOptions) {
 	client := c.Storer.GetServiceClient()
 	// Note: we expect a 'already exists' error here and  ignore it.
 	_, _ = client.CreateContainer(t.Context(), cfg.Container, nil)
-	c.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(c.Cfg.LogID))
+
+	c.TestContext.Init(t, &cfg.TestOptions)
+	c.Cfg = cfg
+
+	c.Log = logger.Sugar.WithServiceName(cfg.TestOptions.TestLabelPrefix)
 }
+
 func (c *TestContext) AzDefaultOpts(opts massifs.StorageOptions) azstorage.Options {
 
 	var err error
@@ -127,23 +161,17 @@ func (c *TestContext) AzDefaultOpts(opts massifs.StorageOptions) azstorage.Optio
 		opts.CBORCodec = &codec
 	}
 	if opts.PathProvider == nil {
-		opts.PathProvider = datatrails.NewPathProvider(opts.LogID)
+		if c.Cfg.PathProvider != nil {
+			opts.PathProvider = c.Cfg.PathProvider
+		} else {
+			opts.PathProvider = datatrails.NewPathProvider(opts.LogID)
+		}
 	}
 	return azstorage.Options{
 		StorageOptions: opts,
 		Store:          c.Storer,
 		StoreWriter:    c.Storer,
 	}
-}
-
-func (c *TestContext) NewNativeObjectReader(opts massifs.StorageOptions) (*azstorage.ObjectReader, error) {
-	azopts := c.AzDefaultOpts(opts)
-	return azstorage.NewObjectReader(context.Background(), azopts)
-}
-
-func (c *TestContext) NewNativeMassifCommitter(opts massifs.StorageOptions) (*azstorage.MassifCommitter, error) {
-	azopts := c.AzDefaultOpts(opts)
-	return azstorage.NewMassifCommitter(context.Background(), azopts)
 }
 
 func (c *TestContext) GetLog() logger.Logger { return c.Log }
@@ -164,7 +192,7 @@ func (c *TestContext) NewStorer() *azblob.Storer {
 	return storer
 }
 
-func (c *TestContext) DeleteBlobsByPrefix(blobPrefixPath string) {
+func (c *TestContext) DeleteByStoragePrefix(blobPrefixPath string) {
 	var err error
 	var r *azblob.ListerResponse
 	var blobs []string

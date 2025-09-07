@@ -8,7 +8,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -36,8 +35,8 @@ func Test_LogTailColatePage(t *testing.T) {
 	mkcollator := func(paths []string) LogTailCollator {
 		lc := NewLogTailCollator(
 			func(storagePath string) storage.LogID {
-				return storageschema.ParsePrefixedLogID("tenant/", storagePath)
-			}, storageschema.ObjectIndexFromPath)
+				return storage.ParsePrefixedLogID("tenant/", storagePath)
+			}, storage.ObjectIndexFromPath)
 
 		var page []*azblob.FilterBlobItem
 		page = make([]*azblob.FilterBlobItem, 0, len(paths))

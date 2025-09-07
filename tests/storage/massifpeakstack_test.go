@@ -14,10 +14,10 @@ import (
 
 func TestPeakStack_StartNextMassif(t *testing.T) {
 	logger.New("INFO")
-	tc := NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestPeakStack_StartNextMassif"))
+	tc := NewTestContext(t, nil, mmrtesting.WithTestLabelPrefix("TestPeakStack_StartNextMassif"))
 	logID := tc.Cfg.LogID
 	// Delete any existing blobs with the same prefix
-	tc.DeleteBlobsByPrefix(datatrails.StoragePrefixPath(logID))
+	tc.DeleteByStoragePrefix(datatrails.StoragePrefixPath(logID))
 
 	providers.PeakStackStartNextMassifTest(tc)
 }
@@ -25,7 +25,7 @@ func TestPeakStack_StartNextMassif(t *testing.T) {
 // TestPeakStack_Height4Massif2to3Size63 reproduces a peak stack issue
 func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	logger.New("INFO")
-	tc := NewDefaultTestContext(t, mmrtesting.WithTestLabelPrefix("TestPeakStack_Height4Massif2to3Size63"))
+	tc := NewTestContext(t, nil, mmrtesting.WithTestLabelPrefix("TestPeakStack_Height4Massif2to3Size63"))
 	logID := tc.Cfg.LogID
 
 	// MassifHeight := uint8(4)
@@ -37,6 +37,6 @@ func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	// require.NoError(t, err)
 
 	pth := datatrails.StoragePrefixPath(logID)
-	tc.DeleteBlobsByPrefix(pth)
+	tc.DeleteByStoragePrefix(pth)
 	providers.PeakStackHeight4Massif2to3Size63Test(tc)
 }

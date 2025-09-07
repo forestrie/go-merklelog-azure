@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
 )
 
 type DatatrailsPathPrefixProvider struct{}
@@ -13,9 +12,9 @@ type DatatrailsPathPrefixProvider struct{}
 func (d DatatrailsPathPrefixProvider) Prefix(logID storage.LogID, otype storage.ObjectType) (string, error) {
 	switch otype {
 	case storage.ObjectMassifStart, storage.ObjectMassifData, storage.ObjectPathMassifs:
-		return fmt.Sprintf("%s/%s/%d/massifs/", V1MMRPrefix, Log2TenantID(logID), storageschema.LogInstanceN), nil
+		return fmt.Sprintf("%s/%s/%d/massifs/", V1MMRPrefix, Log2TenantID(logID), storage.LogInstanceN), nil
 	case storage.ObjectCheckpoint, storage.ObjectPathCheckpoints:
-		return fmt.Sprintf("%s/%s/%d/massifseals/", V1MMRPrefix, Log2TenantID(logID), storageschema.LogInstanceN), nil
+		return fmt.Sprintf("%s/%s/%d/massifseals/", V1MMRPrefix, Log2TenantID(logID), storage.LogInstanceN), nil
 	default:
 		return "", fmt.Errorf("unknown object type %v", otype)
 	}

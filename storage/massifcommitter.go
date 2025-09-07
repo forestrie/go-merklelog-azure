@@ -2,259 +2,66 @@ package storage
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"time"
 
-	"github.com/datatrails/go-datatrails-common/azblob"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
-	"github.com/datatrails/go-datatrails-merklelog/mmr"
-	"github.com/robinbryce/go-merklelog-azure/blobs"
 )
 
-type MassifCommitter struct {
-	ObjectReader
-}
-
-func NewMassifCommitter(ctx context.Context, opts Options) (*MassifCommitter, error) {
-	c := &MassifCommitter{}
-	// because of how we deal with starting a new massif, we defer the creation of the peak stack map.
-	opts.ExplicitPeakIndexMap = true
-	if err := c.Init(ctx, opts); err != nil {
+// NewMassifCommitter the minimal instance required to append leaves to a massif log
+func NewMassifCommitter(
+	ctx context.Context, committerStore massifs.HeadReplacer, opts Options,
+) (*massifs.MassifCommitter[massifs.HeadReplacer], error) {
+	// Create the unified committer
+	c, err := massifs.NewMassifCommitter(
+		committerStore,
+		opts.StorageOptions,
+	)
+	if err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (c *MassifCommitter) Init(ctx context.Context, opts Options) error {
-	if err := c.ObjectReader.Init(ctx, opts); err != nil {
-		return err
-	}
-	if opts.StoreWriter == nil {
-		return fmt.Errorf("a writer is required for a committer")
-	}
-	return nil
-}
-
-func (c *MassifCommitter) GetAppendContext(
-	ctx context.Context,
-) (*massifs.MassifContext, error) {
-	// There are 3 states to consider here
-	// 1. No blobs exist -> setup context for creating first blob
-	// 2. A previous full blob exists -> setup context for creating a new blob
-	// 3. The most recent blob is not full -> setup context for extending current blob
-
-	massifIndex, err := c.HeadIndex(ctx, storage.ObjectMassifData)
-	if errors.Is(err, storage.ErrLogEmpty) {
-		return c.createFirstMassifContext()
-	}
-	// If we are creating, we need to read the bytes from the previous blob to
-	// be able to make the first mmr entry from the root of the last massif.
-	// So we always read the blob we find with
-
-	mc, err := c.GetMassifContext(ctx, massifIndex)
-	if err != nil {
-		return nil, err
-	}
-
-	az, ok := c.Selected.Az.Massifs[massifIndex]
-	if !ok {
-		return nil, fmt.Errorf("this is a bug in objectreader")
-	}
-
-	// NOTICE: While the *index* on blob tags is eventually consistent, the tags
-	// read directly with the blob are *guaranteed* by azure to be 'the values
-	// last written'. This is a critical assumption for our crash fault
-	// tolerant model.
-	//
-	// "After you set your index tags, they exist on the blob and can be
-	// retrieved immediately.  It might take some time before the blob index
-	// updates." -- https://learn.microsoft.com/en-us/azure/storage/blobs/storage-manage-find-blobs?tabs=azure-portal
-	firstIndex, err := GetFirstIndex(az.Tags)
-	if err != nil {
-		return nil, err
-	}
-	if firstIndex != mc.Start.FirstIndex {
-		return nil, fmt.Errorf(
-			"%w: %x vs %x",
-			ErrIncorrectFirstIndexTag,
-			firstIndex, mc.Start.FirstIndex)
-	}
-
-	// The current first & last is initialized from what we read
-
-	// If the blob has space for more nodes, the context is ready and we have
-	// all the state setup.  case 3: existing blob with space, !creating.
-	//  This works because no matter which massif blob this is, just prior to
-	// adding the last *leaf*, the occupied size will be less than the massif
-	// base size. And adding the leaf and its necessary interior nodes will
-	// immediately exceed or equal the base size configured for a massif.
-	sz := massifs.TreeSize(mc.Start.MassifHeight)
-	start := mc.LogStart()
-	if uint64(len(mc.Data))-start < sz {
-		// ok, we have the massif we want, go ahead and create the peak stack map if we need to
-		// TODO: sequencers don't need this, but everyone else does.
-		if err = mc.CreatePeakStackMap(); err != nil {
-			return nil, fmt.Errorf("committer failed to create peak stack map (existing massif): %w", err)
-		}
-		return mc, nil
-	}
-
-	mcnew := *mc
-	aznew := *az
-
-	// if the previous is complete, attempt to start a new massif
-	mcnew.Creating = true
-	aznew.ETag = ""
-	aznew.LastModified = time.UnixMilli(0)
-
-	// re-create Start for the new blob
-	err = mcnew.StartNextMassif()
-	if err != nil {
-		return nil, fmt.Errorf("failed to start next massif: %w", err)
-	}
-	if err = mc.CreatePeakStackMap(); err != nil {
-		return nil, fmt.Errorf("committer failed to create peak stack map (new massif): %w", err)
-	}
-
-	aznew.BlobPath, err = c.Opts.PathProvider.GetStoragePath(mcnew.Start.MassifIndex, storage.ObjectMassifData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get storage path for massif %d: %w", mcnew.Start.MassifIndex, err)
-	}
-	aznew.Tags[TagKeyFirstIndex] = fmt.Sprintf(TagFirstIndexFmt, mcnew.Start.FirstIndex)
-
-	c.Selected.Az.Massifs[mcnew.Start.MassifIndex] = &aznew
-	return &mcnew, nil
-}
-
-func (c *MassifCommitter) CommitContext(ctx context.Context, mc *massifs.MassifContext) error {
-	var err error
-
-	// Check we have not over filled the massif.
-
-	// Note that we need to account for the size based on the full range.  When
-	// committing massifs after the first, additional nodes are always required to
-	// "bury", the previous massif's nodes.
-
-	// leaves that the height (not the height index) allows for.
-	maxLeafIndex := ((mmr.HeightSize(uint64(mc.Start.MassifHeight))+1)>>1)*uint64(mc.Start.MassifIndex+1) - 1
-	spurHeight := mmr.SpurHeightLeaf(maxLeafIndex)
-	// The overall size of the massif that contains that many leaves.
-	maxMMRSize := mmr.MMRIndex(maxLeafIndex) + spurHeight + 1
-
-	count := mc.Count()
-
-	// The last legal index is first leaf + count - 1. The last leaf index + the
-	// height is the last node index + 1.  So we just don't subtract the one on
-	// either clause.
-	if mc.Start.FirstIndex+count > maxMMRSize {
-		return massifs.ErrMassifFull
-	}
-
-	// if we are commiting there must be an extended azure context
-	az, ok := c.Selected.Az.Massifs[mc.Start.MassifIndex]
-	if !ok {
-		// in the Creating case, we should have initialized the tags and blob path when we populated the start for the new massif.
-		return fmt.Errorf("should be retained by read")
-	}
-
-	// Note that while we are continually overwriting the blob, on the period
-	// cadence we will be publishing whatever its current mmr root is to some
-	// thing we cant change (public block chain or at least our own private
-	// ledger). So if we ever break the append only rule, it will be evident
-	// (and not good).
-
-	lastID := mc.GetLastIDTimestamp()
-	az.Tags[TagKeyLastID] = massifs.IDTimestampToHex(lastID, uint8(mc.Start.CommitmentEpoch))
-
-	opts := []azblob.Option{azblob.WithTags(az.Tags)}
-	// CRITICAL: we _must_ use the etag to gaurd against racy updates. It will be absent only when crating the blob
-	if az.ETag != "" {
-		opts = append(opts, azblob.WithEtagMatch(az.ETag))
-	} else {
-		if !mc.Creating {
-			return errors.New("etag is required when updating any blob")
-		}
-	}
-	// Also CRITICAL: We must set the not-exists option if we are creating a new
-	// blob. so we don't racily overwrite a new blob
-	if mc.Creating {
-		// The way to spell 'fail without modifying if the blob exists' is to require that no blob matches *any* etag.
-		opts = append(opts, azblob.WithEtagNoneMatch("*"))
-	}
-
-	wr, err := c.Opts.StoreWriter.Put(ctx, az.BlobPath, azblob.NewBytesReaderCloser(mc.Data),
-		opts...,
+// NewMassifCommitterStore creates a committerStore that provides the minimal
+// interface required by MassifCommitter, and additionally permits access to the
+// regular store functions for reading.
+func NewMassifCommitterStore(
+	ctx context.Context, provider massifs.CommitterStore, opts Options,
+) (*massifs.MassifCommitter[massifs.CommitterStore], error) {
+	// Create the unified committer
+	c, err := massifs.NewMassifCommitter(
+		provider,
+		opts.StorageOptions,
 	)
 	if err != nil {
-		return err
-	}
-	if wr.ETag == nil {
-		return errors.New("etag is required for all writes")
-	}
-	if wr.LastModified == nil {
-		return errors.New("last modified is required for all writes")
-	}
-
-	az.Data = mc.Data
-	az.ETag = *wr.ETag
-	az.LastModified = *wr.LastModified
-	// az.ContentLength = wr.Size
-	az.ContentLength = int64(len(mc.Data))
-
-	c.Selected.Starts[mc.Start.MassifIndex] = &mc.Start
-	if mc.Start.MassifIndex > c.Selected.LastMassifIndex {
-		c.Selected.LastMassifIndex = mc.Start.MassifIndex
-	}
-
-	mc.Creating = false
-
-	return err
-}
-
-func (c *MassifCommitter) createFirstMassifContext() (*massifs.MassifContext, error) {
-	// XXX: TODO: we _could_ just roll an id so that we never need to deal with
-	// the zero case. for the first blob that is entirely benign.
-	start := massifs.NewMassifStart(0, uint32(c.Opts.CommitmentEpoch), c.Opts.MassifHeight, 0, 0)
-
-	// the zero values, or those explicitly set above are correct
-	data, err := start.MarshalBinary()
-	if err != nil {
 		return nil, err
 	}
-
-	storagePath, err := c.Opts.PathProvider.GetStoragePath(0, storage.ObjectMassifData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get storage path for first massif: %w", err)
-	}
-	az := &blobs.LogBlobContext{
-		BlobPath: storagePath,
-		Tags:     map[string]string{},
-	}
-
-	mc := &massifs.MassifContext{
-		Creating: true,
-		// epoch, massifIndex and firstIndex are zero and prev root is 32 bytes of zero
-		Start: start,
-	}
-
-	// A sequencer in the process of appending nodes can avoid needing the mapping. Everyone else needs it.
-	// This detail will go away if we switch to fixed allocation of the peak stack space
-	if !c.Opts.ExplicitPeakIndexMap {
-		if err := mc.CreatePeakStackMap(); err != nil {
-			return nil, fmt.Errorf("failed to auto create peak stack map: %w", err)
-		}
-	}
-
-	// We pre-allocate and zero-fill the index, see the commentary in StartNextMassif
-	az.Data = append(data, mc.InitIndexData()...)
-	mc.Data = az.Data
-
-	// mc.FirstIndex zero value is correct
-	SetFirstIndex(mc.Start.FirstIndex, az.Tags)
-
-	c.Selected.Az.Massifs[start.MassifIndex] = az
-
-	return mc, nil
+	return c, nil
 }
+
+type MassifCommitterStore struct {
+	massifs.MassifCommitter[massifs.CommitterStore]
+}
+
+func (m *MassifCommitterStore) GetStorageOptions() massifs.StorageOptions {
+	return m.Provider.GetStorageOptions()
+}
+
+func (m *MassifCommitterStore) HeadIndex(
+	ctx context.Context, otype storage.ObjectType) (uint32, error) {
+	return m.Provider.HeadIndex(ctx, otype)
+}
+
+func (m *MassifCommitterStore) GetMassifContext(
+	ctx context.Context, massifIndex uint32) (*massifs.MassifContext, error) {
+	return m.Provider.GetMassifContext(ctx, massifIndex)
+}
+func (m *MassifCommitterStore) GetCheckpoint(
+	ctx context.Context, massifIndex uint32) (*massifs.Checkpoint, error) {
+	return m.Provider.GetCheckpoint(ctx, massifIndex)
+}
+
+// func (m *MassifCommitterReader) GetStart(
+// 	ctx context.Context, massifIndex uint32) (*massifs.MassifStart, error) {
+// 	return m.Provider.GetStart(ctx, massifIndex)
+// }

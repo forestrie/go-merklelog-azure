@@ -15,7 +15,6 @@ import (
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/snowflakeid"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/watcher"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -40,7 +39,7 @@ func TestConfigDefaults(t *testing.T) {
 			args: args{
 				cfg: &WatchConfig{},
 			},
-			errPrefix: "provide horizon on its own or either of the since",
+			errPrefix: "provide the latest flag, horizon on its own or either",
 		},
 
 		{
@@ -129,7 +128,7 @@ const (
 
 func TestWatchForChanges(t *testing.T) {
 	mustLogID := func(uuidstr string) storage.LogID {
-		logid := storageschema.ParsePrefixedLogID("tenant/", uuidstr)
+		logid := storage.ParsePrefixedLogID("tenant/", uuidstr)
 		if logid == nil {
 			uid, err := uuid.Parse(uuidstr)
 			if err != nil {
@@ -359,9 +358,9 @@ func TestWatchForChanges(t *testing.T) {
 
 			collator := NewLogTailCollator(
 				func(storagePath string) storage.LogID {
-					return storageschema.ParsePrefixedLogID("tenant/", storagePath)
+					return storage.ParsePrefixedLogID("tenant/", storagePath)
 				},
-				storageschema.ObjectIndexFromPath,
+				storage.ObjectIndexFromPath,
 			)
 			watcher, err := NewWatcher(tt.args.cfg)
 			if err != nil {

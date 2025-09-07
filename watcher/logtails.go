@@ -2,7 +2,7 @@ package watcher
 
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
+	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/watcher"
 	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
 )
@@ -14,8 +14,8 @@ type LogTailCollator struct {
 
 // NewLogTailCollator creates a log tail collator
 func NewLogTailCollator(
-	path2LogID storageschema.LogIDFromPathFunc,
-	path2ObjectIndex storageschema.ObjectIndexFromPathFunc,
+	path2LogID storage.LogIDFromPathFunc,
+	path2ObjectIndex storage.ObjectIndexFromPathFunc,
 ) LogTailCollator {
 	return LogTailCollator{
 		LogTailCollator: watcher.NewLogTailCollator(path2LogID, path2ObjectIndex),

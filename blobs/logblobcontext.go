@@ -30,6 +30,40 @@ type LogBlobContext struct {
 	ContentLength int64
 }
 
+func NewLogBlobContext(blobPath string, rr *azblob.ReaderResponse) *LogBlobContext {
+
+
+	lc := &LogBlobContext{
+		BlobPath: blobPath,
+	}
+	lc.processResponse(rr, nil)
+	return lc
+}
+
+func LogBlobContextFromWriteResponse(blobPath string, wr *azblob.WriteResponse) *LogBlobContext {
+
+
+	lc := &LogBlobContext{
+		BlobPath: blobPath,
+	}
+	lc.WriteUpdate(wr)
+	return lc
+}
+
+func (lc *LogBlobContext) WriteUpdate(wr *azblob.WriteResponse) {
+	if wr == nil {
+		return
+	}
+	if wr.ETag != nil {
+		lc.ETag = *wr.ETag
+	}
+	if wr.LastModified != nil {
+		lc.LastModified = *wr.LastModified
+	}
+	lc.ContentLength = wr.Size
+	lc.LastRead = time.Now()
+}
+
 func (lc *LogBlobContext) CopyTags() map[string]string {
 	if lc.Tags == nil {
 		return lc.Tags

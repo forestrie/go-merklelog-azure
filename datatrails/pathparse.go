@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
+	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 )
 
 var ErrMassifPathFmt = errors.New("invalid massif path")
@@ -18,7 +18,7 @@ func IsMassifPathLike(path string) bool {
 	if !strings.HasPrefix(path, V1MMRTenantPrefix) {
 		return false
 	}
-	if !strings.HasSuffix(path, storageschema.V1MMRMassifExt) {
+	if !strings.HasSuffix(path, storage.V1MMRMassifExt) {
 		return false
 	}
 	return true
@@ -29,7 +29,7 @@ func IsSealPathLike(path string) bool {
 	if !strings.HasPrefix(path, V1MMRTenantPrefix) {
 		return false
 	}
-	if !strings.HasSuffix(path, storageschema.V1MMRSealSignedRootExt) {
+	if !strings.HasSuffix(path, storage.V1MMRSealSignedRootExt) {
 		return false
 	}
 	return true
@@ -45,7 +45,7 @@ func ParseMassifPathTenant(path string) (string, error) {
 	// the +1 strips the leading /
 	path = path[len(V1MMRTenantPrefix)+1:]
 
-	parts := strings.Split(path, storageschema.V1MMRPathSep)
+	parts := strings.Split(path, storage.V1MMRPathSep)
 	if len(parts) == 0 {
 		return "", fmt.Errorf("invalid massif path: %s", path)
 	}
@@ -59,16 +59,16 @@ func ParseMassifPathNumberExt(path string) (uint32, string, error) {
 	if !strings.HasPrefix(path, V1MMRTenantPrefix) {
 		return 0, "", fmt.Errorf("%w: %s", ErrMassifPathFmt, path)
 	}
-	parts := strings.Split(path, storageschema.V1MMRPathSep)
+	parts := strings.Split(path, storage.V1MMRPathSep)
 	if len(parts) == 0 {
 		return 0, "", fmt.Errorf("%w: %s", ErrMassifPathFmt, path)
 	}
 	base := parts[len(parts)-1]
-	parts = strings.Split(base, storageschema.V1MMRExtSep)
+	parts = strings.Split(base, storage.V1MMRExtSep)
 	if len(parts) != 2 {
 		return 0, "", fmt.Errorf("%w: base name invalid %s", ErrMassifPathFmt, path)
 	}
-	if parts[1] != storageschema.V1MMRMassifExt && parts[1] != storageschema.V1MMRSealSignedRootExt {
+	if parts[1] != storage.V1MMRMassifExt && parts[1] != storage.V1MMRSealSignedRootExt {
 		return 0, "", fmt.Errorf("%w: extension invalid %s", ErrMassifPathFmt, path)
 	}
 	number, err := strconv.ParseUint(parts[0], 10, 32)

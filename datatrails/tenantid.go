@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storageschema"
 	"github.com/google/uuid"
 )
 
@@ -17,7 +16,7 @@ func Log2TenantID(logID storage.LogID) string {
 
 func TenantID2LogID(storagePath string) storage.LogID {
 
-	return storageschema.ParsePrefixedLogID("tenant/", storagePath)
+	return storage.ParsePrefixedLogID("tenant/", storagePath)
 }
 
 // IdentifyLogTenantID identifies the log storage path by the presence of a datatrails tenant id string.
