@@ -21,6 +21,8 @@ tasks:
       - |
         GIT_BOOTSTRAP_SH=$(curl -fsSL https://raw.githubusercontent.com/robinbryce/git-bootstrap/refs/heads/main/git-bootstrap.v2.sh)
         sh -c "$GIT_BOOTSTRAP_SH" - clone .
+        sh -c "$GIT_BOOTSTRAP_SH" - checkout .
+
         if [ -f ../go.work ]; then
           echo "go.work exists, you may need to update it"
         else
