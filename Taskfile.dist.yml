@@ -51,7 +51,9 @@ tasks:
   test:unit:
     desc: run the unit tests
     cmds:
+      - task: azurite:preflight
       - task: gotest:unit
+      - task: azurite:stop
 
   test:integration:
     cmds:
