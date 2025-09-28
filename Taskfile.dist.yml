@@ -28,7 +28,6 @@ tasks:
         go 1.24.4
         use (
         	./go-datatrails-common
-        	./go-datatrails-logverification
         	./go-datatrails-merklelog/massifs
         	./go-datatrails-merklelog/mmr
         	./go-datatrails-serialization/eventsv1
