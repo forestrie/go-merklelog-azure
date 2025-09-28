@@ -8,6 +8,7 @@ import (
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
+	"github.com/robinbryce/go-merklelog-azure/datatrails"
 )
 
 func (r *CachingStore) GetStorageOptions() massifs.StorageOptions {
@@ -50,6 +51,23 @@ func (r *CachingStore) CheckpointData(massifIndex uint32) ([]byte, bool, error) 
 	return n.Data, true, nil
 }
 
+func (r *CachingStore) ObjectPath(massifIndex uint32, otype storage.ObjectType) (string, error) {
+	c := r.Selected
+	if c == nil {
+		return "", storage.ErrLogNotSelected
+	}
+	prefix, err := datatrails.StorageObjectPrefix(c.LogID, otype)
+	if err != nil {
+		return "", fmt.Errorf("failed to get prefix path for type %v: %w", otype, err)
+	}
+
+	storagePath, err := storage.ObjectPath(prefix, c.LogID, massifIndex, otype)
+	if err != nil {
+		return "", fmt.Errorf("failed to get storage path for massif %d: %w", massifIndex, err)
+	}
+	return storagePath, nil
+}
+
 func (r *CachingStore) MassifReadN(ctx context.Context, massifIndex uint32, n int) ([]byte, error) {
 	var err error
 	var storagePath string
@@ -59,7 +77,7 @@ func (r *CachingStore) MassifReadN(ctx context.Context, massifIndex uint32, n in
 		return nil, storage.ErrLogNotSelected
 	}
 
-	storagePath, err = c.PathProvider.GetStoragePath(massifIndex, storage.ObjectMassifData)
+	storagePath, err = r.ObjectPath(massifIndex, storage.ObjectMassifData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get storage path for massif %d: %w", massifIndex, err)
 	}
@@ -90,8 +108,7 @@ func (r *CachingStore) CheckpointRead(ctx context.Context, massifIndex uint32) (
 	if c == nil {
 		return nil, storage.ErrLogNotSelected
 	}
-
-	storagePath, err = c.PathProvider.GetStoragePath(massifIndex, storage.ObjectCheckpoint)
+	storagePath, err = r.ObjectPath(massifIndex, storage.ObjectCheckpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get storage path for massif %d: %w", massifIndex, err)
 	}

@@ -12,7 +12,6 @@ type NativeContexts struct {
 }
 
 type LogCache struct {
-	PathProvider        storage.PathProvider
 	LogID               storage.LogID // The log ID for this cache, used to restore the state
 	LastMassifIndex     uint32        // The last massif index read, used for lazy loading
 	LastCheckpointIndex uint32        // The last checkpoint index read, used for lazy loading
@@ -23,9 +22,8 @@ type LogCache struct {
 	Az NativeContexts
 }
 
-func NewLogCache(pathProvider storage.PathProvider, logID storage.LogID) *LogCache {
+func NewLogCache(logID storage.LogID) *LogCache {
 	return &LogCache{
-		PathProvider:        pathProvider,
 		LogID:               logID,
 		LastMassifIndex:     storage.HeadMassifIndex,
 		LastCheckpointIndex: storage.HeadMassifIndex,

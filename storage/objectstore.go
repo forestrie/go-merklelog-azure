@@ -63,12 +63,6 @@ func (r *CachingStore) SelectLog(ctx context.Context, logId storage.LogID) error
 		return nil // already selected
 	}
 
-	// This is a wart: if the path provider is not set, we lazily create a datatrails one
-	// If the caller needs a new one per SelectLog, they should configure when creating the ObjectStore
-	if r.Opts.PathProvider == nil {
-		r.Opts.PathProvider = datatrails.NewPathProvider(logId)
-	}
-
 	// if we don't have a log cache, create one
 	if r.LogCache == nil {
 		r.LogCache = make(map[string]*LogCache)
@@ -128,7 +122,7 @@ func (r *CachingStore) Init(ctx context.Context) error {
 		return err
 	}
 	r.reset()
-	if r.Opts.LogID != nil && r.Opts.PathProvider != nil {
+	if r.Opts.LogID != nil {
 		if err := r.SelectLog(ctx, r.Opts.LogID); err != nil {
 			return fmt.Errorf("failed to select log %s: %w", r.Opts.LogID, err)
 		}
@@ -137,7 +131,7 @@ func (r *CachingStore) Init(ctx context.Context) error {
 	return nil
 }
 func (r *CachingStore) newLogCache(logID storage.LogID) *LogCache {
-	return NewLogCache(r.Opts.PathProvider, logID)
+	return NewLogCache(logID)
 }
 
 func (r *CachingStore) checkOptions() error {
@@ -151,10 +145,6 @@ func (r *CachingStore) checkOptions() error {
 	}
 	if r.Opts.MassifHeight == 0 {
 		r.Opts.MassifHeight = 14 // the height adopted by default for the datatrails ledger
-	}
-
-	if r.Opts.PathProvider == nil && r.Opts.LogID != nil {
-		r.Opts.PathProvider = datatrails.NewPathProvider(r.Opts.LogID)
 	}
 
 	if r.Opts.CBORCodec == nil {
@@ -188,7 +178,7 @@ func (r *CachingStore) lastPrefixedObject(ctx context.Context, prefixPath string
 }
 
 func (r *CachingStore) lastObject(ctx context.Context, c *LogCache, otype storage.ObjectType) (uint32, error) {
-	prefixPath, err := c.PathProvider.GetStoragePrefix(otype)
+	prefixPath, err := datatrails.StorageObjectPrefix(c.LogID, otype)
 	if err != nil {
 		return 0, err
 	}

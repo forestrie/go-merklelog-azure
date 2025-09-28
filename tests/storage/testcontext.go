@@ -9,14 +9,15 @@ import (
 	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
 	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/robinbryce/go-merklelog-azure/datatrails"
+	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
 	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
+	"github.com/robinbryce/go-merklelog-provider-testing/providers"
 	"github.com/stretchr/testify/require"
 )
 
 type TestContext struct {
-	mmrtesting.TestContext[*TestContext, *TestContext]
+	mmrtesting.TestContext[*TestContext]
 	Cfg    *TestOptions
 	Log    logger.Logger
 	Storer *azblob.Storer
@@ -25,6 +26,7 @@ type TestContext struct {
 type TestOptions struct {
 	mmrtesting.TestOptions
 	Container string // can be "" defaults to TestLabelPrefix
+	DefaultBuilder mmrtesting.LogBuilder
 }
 
 func WithContainer(container string) massifs.Option {
@@ -52,6 +54,41 @@ func (c *TestContext) GetT() *testing.T {
 	return c.T
 }
 
+func NewLogBuilderFactory(tc *TestContext, opts massifs.StorageOptions) mmrtesting.LogBuilder {
+	azopts := tc.AzDefaultOpts(opts)
+	store, err := azstorage.NewMassifStore(context.Background(), azopts)
+	require.NoError(tc.T, err)
+	committer, err := azstorage.NewMassifCommitterStore(context.Background(), store, azopts)
+	require.NoError(tc.T, err)
+
+	builder := mmrtesting.LogBuilder{
+		LeafGenerator: mmrtesting.LeafGenerator{
+			LogID: opts.LogID,
+			Generator: func(logID storage.LogID, base, i uint64) any {
+				return tc.G.GenerateLeafContent(logID, base, i)
+			},
+			Encoder: func(a any) mmrtesting.AddLeafArgs {
+				return tc.G.EncodeLeafForAddition(a)
+			},
+		},
+		DeleteLog:       tc.DeleteLog,
+		MassifCommitter: committer,
+		MassifSealer:    store,
+		ObjectStore:     store,
+	}
+	return builder
+}
+
+func NewStorageMassifCommitterContext(tc *TestContext) *providers.StorageMassifCommitterContext {
+	sc := &providers.StorageMassifCommitterContext{
+		BuilderFactory: func(opts massifs.StorageOptions) mmrtesting.LogBuilder {
+			return NewLogBuilderFactory(tc, opts)
+		},
+	}
+	return sc
+}
+
+/*
 func (c *TestContext) NewMassifGetter(opts massifs.StorageOptions) (massifs.MassifContextGetter, error) {
 	azopts := c.AzDefaultOpts(opts)
 
@@ -77,24 +114,13 @@ func (c *TestContext) NewMassifCommitter(opts massifs.StorageOptions) (*massifs.
 	return committer, nil
 }
 
-func (c *TestContext) NewMassifCommitterStore(opts massifs.StorageOptions) (*massifs.MassifCommitter[massifs.CommitterStore], error) {
-	azopts := c.AzDefaultOpts(opts)
-	store, err := azstorage.NewMassifStore(context.Background(), azopts)
-	if err != nil {
-		return nil, err
-	}
-	committer, err := azstorage.NewMassifCommitterStore(context.Background(), store, azopts)
-	if err != nil {
-		return nil, err
-	}
 
-	return committer, nil
-}
 
 func (c *TestContext) NewCommitterStore(opts massifs.StorageOptions) (massifs.CommitterStore, error) {
 	azopts := c.AzDefaultOpts(opts)
 	return azstorage.NewMassifStore(context.Background(), azopts)
 }
+*/
 
 func NewTestContext(t *testing.T, cfg *TestOptions, opts ...massifs.Option) *TestContext {
 
@@ -117,7 +143,6 @@ func (c *TestContext) init(t *testing.T, cfg *TestOptions) {
 
 	c.Cfg = cfg
 	c.Emulator = c
-	c.Factory = c
 
 	logger.New(c.Cfg.LogLevel)
 
@@ -159,13 +184,6 @@ func (c *TestContext) AzDefaultOpts(opts massifs.StorageOptions) azstorage.Optio
 		codec, err = massifs.NewCBORCodec()
 		require.NoError(c.T, err)
 		opts.CBORCodec = &codec
-	}
-	if opts.PathProvider == nil {
-		if c.Cfg.PathProvider != nil {
-			opts.PathProvider = c.Cfg.PathProvider
-		} else {
-			opts.PathProvider = datatrails.NewPathProvider(opts.LogID)
-		}
 	}
 	return azstorage.Options{
 		StorageOptions: opts,

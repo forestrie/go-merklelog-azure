@@ -7,6 +7,7 @@ import (
 	"github.com/datatrails/go-datatrails-common/azblob"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
+	"github.com/robinbryce/go-merklelog-azure/datatrails"
 )
 
 func (r *CachingStore) HasCapability(feature storage.StorageFeature) bool {
@@ -37,7 +38,11 @@ func (r *CachingStore) Put(
 	if ok {
 		storagePath = n.BlobPath
 	} else {
-		storagePath, err = r.Opts.PathProvider.GetStoragePath(massifIndex, ty)
+		prefix, err := datatrails.StorageObjectPrefix(r.Selected.LogID, ty)
+		if err != nil {
+			return fmt.Errorf("failed to get prefix path for type %v: %w", ty, err)
+		}
+		storagePath, err = storage.ObjectPath(prefix, r.Selected.LogID, massifIndex, ty)
 		if err != nil {
 			return fmt.Errorf("failed to get storage path for massif %d: %w", massifIndex, err)
 		}
@@ -47,8 +52,11 @@ func (r *CachingStore) Put(
 	var azureOpts []azblob.Option
 
 	// Handle optimistic concurrency control
-	if failIfExists {
-		// For new blobs, ensure they don't already exist
+	if failIfExists || !ok {
+
+		// For new blobs, ensure they don't already exist Note that in the !ok
+		// case, the caller should have read the blob first if replacing it and
+		// this enforces that.
 		azureOpts = append(azureOpts, azblob.WithEtagNoneMatch("*"))
 	} else {
 		// For updates, use ETag for optimistic concurrency

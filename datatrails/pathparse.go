@@ -12,6 +12,19 @@ import (
 var ErrMassifPathFmt = errors.New("invalid massif path")
 
 // XXX: NOTE: Just staging these functions here while the open sourcing effort is in flight
+// LogID from the storage path according to the datatrails massif storage schema.
+// The storage path is expected to be in the format:
+// /v1/mmrs/tenant/<tenant_uuid>/<log_instance>/massifs/
+// or
+// /v1/mmrs/tenant/<tenant_uuid>/<log_instance>/massifseals/
+func StorageLogID(storagePath string) (storage.LogID, error) {
+	logID := TenantID2LogID(storagePath)
+	if logID != nil {
+		return logID, nil
+	}
+
+	return nil, fmt.Errorf("invalid storage path prefix: %s", storagePath)
+}
 
 // IsMassifPathLike performs a shallow sanity check on a path to see if it could be a massif log path
 func IsMassifPathLike(path string) bool {
