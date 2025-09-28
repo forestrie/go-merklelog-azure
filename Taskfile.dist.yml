@@ -25,6 +25,7 @@ tasks:
           echo "go.work exists, you may need to update it"
         else
         cat <<EOF > ../go.work
+        go 1.24.4
         use (
         	./go-datatrails-common
         	./go-datatrails-logverification
