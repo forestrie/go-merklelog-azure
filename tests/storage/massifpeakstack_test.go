@@ -6,7 +6,7 @@ import (
 	"github.com/datatrails/go-datatrails-common/logger"
 
 	// "github.com/robinbryce/go-merklelog-azure/committer"
-	"github.com/robinbryce/go-merklelog-azure/datatrails"
+	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 

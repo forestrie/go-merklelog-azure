@@ -11,8 +11,8 @@ import (
 	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
-	"github.com/robinbryce/go-merklelog-azure/datatrails"
 )
 
 // TODO: split this into ReaderOptions, CommitterOptions, WriterOptions as needed

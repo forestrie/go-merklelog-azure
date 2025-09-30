@@ -7,8 +7,8 @@ import (
 	"github.com/datatrails/go-datatrails-common/azblob"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
-	"github.com/robinbryce/go-merklelog-azure/datatrails"
 )
 
 func (r *CachingStore) GetStorageOptions() massifs.StorageOptions {
