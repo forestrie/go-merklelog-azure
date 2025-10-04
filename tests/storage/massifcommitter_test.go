@@ -12,33 +12,33 @@ import (
 func TestMassifCommitter_firstMassif(t *testing.T) {
 	logger.New("TEST")
 	tc := NewTestContext(t, nil, mmrtesting.WithTestLabelPrefix("TestPeakStack_StartNextMassif"))
-	sc := NewStorageMassifCommitterContext(tc)
-	providers.StorageMassifCommitterFirstMassifTest(tc, sc)
+	factory := NewBuilderFactory(tc)
+	providers.StorageMassifCommitterFirstMassifTest(tc, factory)
 }
 
 func TestMassifCommitter_massifAddFirst(t *testing.T) {
 
 	logger.New("TEST")
 	tc := NewTestContext(t, nil, mmrtesting.WithTestLabelPrefix("TestMassifCommitter_massifAddFirst"))
-	sc := NewStorageMassifCommitterContext(tc)
+	factory := NewBuilderFactory(tc)
 
-	providers.StorageMassifCommitterAddFirstTwoLeavesTest(tc, sc)
+	providers.StorageMassifCommitterAddFirstTwoLeavesTest(tc, factory)
 }
 
 func TestMassifCommitter_massifExtend(t *testing.T) {
 	logger.New("TEST")
 	tc := NewTestContext(t, nil, mmrtesting.WithTestLabelPrefix("TestMassifCommitter_massifExtend"))
-	sc := NewStorageMassifCommitterContext(tc)
+	factory := NewBuilderFactory(tc)
 
-	providers.StorageMassifCommitterExtendAndCommitFirstTest(tc, sc)
+	providers.StorageMassifCommitterExtendAndCommitFirstTest(tc, factory)
 }
 
 func TestMassifCommitter_massifComplete(t *testing.T) {
 
 	logger.New("TEST")
 	tc := NewTestContext(t, nil, mmrtesting.WithTestLabelPrefix("TestMassifCommitter_massifComplete"))
-	sc := NewStorageMassifCommitterContext(tc)
-	providers.StorageMassifCommitterCompleteFirstTest(tc, sc)
+	factory := NewBuilderFactory(tc)
+	providers.StorageMassifCommitterCompleteFirstTest(tc, factory)
 }
 
 // TestMassifCommitter_massifoverfilsafe tests that we can't commit a massif blob that has been over filled
@@ -46,14 +46,14 @@ func TestMassifCommitter_massifoverfillsafe(t *testing.T) {
 
 	logger.New("TEST")
 	tc := NewTestContext(t, nil, mmrtesting.WithTestLabelPrefix("TestMassifCommitter_massifoverfillsafe"))
-	sc := NewStorageMassifCommitterContext(tc)
-	providers.StorageMassifCommitterOverfillSafeTest(tc, sc)
+	factory := NewBuilderFactory(tc)
+	providers.StorageMassifCommitterOverfillSafeTest(tc, factory)
 }
 
 func TestMassifCommitter_threemassifs(t *testing.T) {
 
 	logger.New("TEST")
 	tc := NewTestContext(t, nil, mmrtesting.WithTestLabelPrefix("TestMassifCommitter_threemassifs"))
-	sc := NewStorageMassifCommitterContext(tc)
-	providers.StorageMassifCommitterThreeMassifsTest(tc, sc)
+	factory := NewBuilderFactory(tc)
+	providers.StorageMassifCommitterThreeMassifsTest(tc, factory)
 }

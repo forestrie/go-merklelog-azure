@@ -26,8 +26,3 @@ type azureWriter interface {
 		opts ...azblob.Option,
 	) (*azblob.WriteResponse, error)
 }
-
-type azureBlobs interface {
-	azureReader
-	azureWriter
-}

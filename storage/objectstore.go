@@ -8,8 +8,6 @@ import (
 	"net/http"
 
 	azStorageBlob "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
-	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
@@ -17,18 +15,41 @@ import (
 
 // TODO: split this into ReaderOptions, CommitterOptions, WriterOptions as needed
 type Options struct {
-	massifs.StorageOptions
 	Store       azureReader // This is the native interface for the storage provider, Azure Blob Storage
 	StoreWriter azureWriter
 }
 
 type CachingStore struct {
-	Opts        massifs.StorageOptions
 	Store       azureReader
 	StoreWriter azureWriter
 
 	LogCache map[string]*LogCache
 	Selected *LogCache
+}
+
+func NewStore(
+	ctx context.Context, opts Options,
+) (*CachingStore, error) {
+	r, err := MakeCachingStore(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func MakeCachingStore(
+	ctx context.Context, opts Options,
+) (CachingStore, error) {
+
+	cachingReader := CachingStore{
+		Store:       opts.Store,
+		StoreWriter: opts.StoreWriter,
+	}
+
+	if err := cachingReader.Init(ctx); err != nil {
+		return CachingStore{}, err
+	}
+	return cachingReader, nil
 }
 
 /*
@@ -122,11 +143,6 @@ func (r *CachingStore) Init(ctx context.Context) error {
 		return err
 	}
 	r.reset()
-	if r.Opts.LogID != nil {
-		if err := r.SelectLog(ctx, r.Opts.LogID); err != nil {
-			return fmt.Errorf("failed to select log %s: %w", r.Opts.LogID, err)
-		}
-	}
 
 	return nil
 }
@@ -140,21 +156,6 @@ func (r *CachingStore) checkOptions() error {
 		return fmt.Errorf("store reader is required")
 	}
 
-	if r.Opts.CommitmentEpoch == 0 {
-		r.Opts.CommitmentEpoch = 1 // good until the next unix epoch
-	}
-	if r.Opts.MassifHeight == 0 {
-		r.Opts.MassifHeight = 14 // the height adopted by default for the datatrails ledger
-	}
-
-	if r.Opts.CBORCodec == nil {
-		var err error
-		var codec commoncbor.CBORCodec
-		if codec, err = massifs.NewRootSignerCodec(); err != nil {
-			return err
-		}
-		r.Opts.CBORCodec = &codec
-	}
 	return nil
 }
 

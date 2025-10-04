@@ -5,15 +5,10 @@ import (
 	"fmt"
 
 	"github.com/datatrails/go-datatrails-common/azblob"
-	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
 )
-
-func (r *CachingStore) GetStorageOptions() massifs.StorageOptions {
-	return r.Opts
-}
 
 // HeadIndex finds the last object and returns it's index without reading the
 // data.

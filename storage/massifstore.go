@@ -1,5 +1,6 @@
 package storage
 
+/*
 import (
 	"context"
 
@@ -37,8 +38,11 @@ func MakeMassifStore(
 	return MassifStore{massifs.MassifCachingStore[*CachingStore]{
 		MassifStore: massifs.MassifStore[*CachingStore]{
 			MassifReader: massifs.MassifReader[*CachingStore]{
-				Provider: &cachingReader,
+				MassifBaseReader: massifs.MassifBaseReader[*CachingStore]{
+					Provider: &cachingReader,
+				},
 			},
 		},
 	}}, nil
 }
+*/

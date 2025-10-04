@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/datatrails/go-datatrails-common/azblob"
-	commoncbor "github.com/datatrails/go-datatrails-common/cbor"
 	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
@@ -25,7 +24,7 @@ type TestContext struct {
 
 type TestOptions struct {
 	mmrtesting.TestOptions
-	Container string // can be "" defaults to TestLabelPrefix
+	Container      string // can be "" defaults to TestLabelPrefix
 	DefaultBuilder mmrtesting.LogBuilder
 }
 
@@ -54,16 +53,19 @@ func (c *TestContext) GetT() *testing.T {
 	return c.T
 }
 
-func NewLogBuilderFactory(tc *TestContext, opts massifs.StorageOptions) mmrtesting.LogBuilder {
-	azopts := tc.AzDefaultOpts(opts)
-	store, err := azstorage.NewMassifStore(context.Background(), azopts)
-	require.NoError(tc.T, err)
-	committer, err := azstorage.NewMassifCommitterStore(context.Background(), store, azopts)
+func NewLogBuilder(tc *TestContext) mmrtesting.LogBuilder {
+	azopts := tc.AzDefaultOpts()
+
+	store := &azstorage.CachingStore{
+		Store:       azopts.Store,
+		StoreWriter: azopts.StoreWriter,
+	}
+
+	err := store.Init(tc.T.Context())
 	require.NoError(tc.T, err)
 
 	builder := mmrtesting.LogBuilder{
 		LeafGenerator: mmrtesting.LeafGenerator{
-			LogID: opts.LogID,
 			Generator: func(logID storage.LogID, base, i uint64) any {
 				return tc.G.GenerateLeafContent(logID, base, i)
 			},
@@ -71,56 +73,20 @@ func NewLogBuilderFactory(tc *TestContext, opts massifs.StorageOptions) mmrtesti
 				return tc.G.EncodeLeafForAddition(a)
 			},
 		},
-		DeleteLog:       tc.DeleteLog,
-		MassifCommitter: committer,
-		MassifSealer:    store,
-		ObjectStore:     store,
+		DeleteLog:          tc.DeleteLog,
+		SelectLog:          store.SelectLog,
+		ObjectReader:       store,
+		ObjectWriter:       store,
+		ObjectReaderWriter: store,
 	}
 	return builder
 }
 
-func NewStorageMassifCommitterContext(tc *TestContext) *providers.StorageMassifCommitterContext {
-	sc := &providers.StorageMassifCommitterContext{
-		BuilderFactory: func(opts massifs.StorageOptions) mmrtesting.LogBuilder {
-			return NewLogBuilderFactory(tc, opts)
-		},
+func NewBuilderFactory(tc *TestContext) providers.BuilderFactory {
+	return func() mmrtesting.LogBuilder {
+		return NewLogBuilder(tc)
 	}
-	return sc
 }
-
-/*
-func (c *TestContext) NewMassifGetter(opts massifs.StorageOptions) (massifs.MassifContextGetter, error) {
-	azopts := c.AzDefaultOpts(opts)
-
-	store, err := azstorage.NewMassifStore(context.Background(), azopts)
-	if err != nil {
-		return nil, err
-	}
-	return store, nil
-}
-
-func (c *TestContext) NewMassifCommitter(opts massifs.StorageOptions) (*massifs.MassifCommitter[massifs.HeadReplacer], error) {
-	azopts := c.AzDefaultOpts(opts)
-
-	store, err := azstorage.NewMassifStore(context.Background(), azopts)
-	if err != nil {
-		return nil, err
-	}
-	committer, err := azstorage.NewMassifCommitter(context.Background(), store, azopts)
-	if err != nil {
-		return nil, err
-	}
-
-	return committer, nil
-}
-
-
-
-func (c *TestContext) NewCommitterStore(opts massifs.StorageOptions) (massifs.CommitterStore, error) {
-	azopts := c.AzDefaultOpts(opts)
-	return azstorage.NewMassifStore(context.Background(), azopts)
-}
-*/
 
 func NewTestContext(t *testing.T, cfg *TestOptions, opts ...massifs.Option) *TestContext {
 
@@ -166,29 +132,11 @@ func (c *TestContext) init(t *testing.T, cfg *TestOptions) {
 	c.Log = logger.Sugar.WithServiceName(cfg.TestOptions.TestLabelPrefix)
 }
 
-func (c *TestContext) AzDefaultOpts(opts massifs.StorageOptions) azstorage.Options {
+func (c *TestContext) AzDefaultOpts() azstorage.Options {
 
-	var err error
-
-	if opts.LogID == nil {
-		opts.LogID = c.Cfg.LogID
-	}
-	if opts.MassifHeight == 0 {
-		opts.MassifHeight = c.Cfg.TestOptions.MassifHeight
-	}
-	if opts.CommitmentEpoch == 0 {
-		opts.CommitmentEpoch = c.Cfg.TestOptions.CommitmentEpoch
-	}
-	if opts.CBORCodec == nil {
-		var codec commoncbor.CBORCodec
-		codec, err = massifs.NewCBORCodec()
-		require.NoError(c.T, err)
-		opts.CBORCodec = &codec
-	}
 	return azstorage.Options{
-		StorageOptions: opts,
-		Store:          c.Storer,
-		StoreWriter:    c.Storer,
+		Store:       c.Storer,
+		StoreWriter: c.Storer,
 	}
 }
 

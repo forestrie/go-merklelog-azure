@@ -1,5 +1,6 @@
 package storage
 
+/*
 import (
 	"github.com/datatrails/go-datatrails-merklelog/massifs"
 	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
@@ -39,4 +40,4 @@ func (r *CachingStore) SetCheckpoint(massifIndex uint32, checkpt *massifs.Checkp
 	}
 	c.Checkpoints[massifIndex] = checkpt
 	return nil
-}
+}*/
