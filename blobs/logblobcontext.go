@@ -32,7 +32,6 @@ type LogBlobContext struct {
 
 func NewLogBlobContext(blobPath string, rr *azblob.ReaderResponse) *LogBlobContext {
 
-
 	lc := &LogBlobContext{
 		BlobPath: blobPath,
 	}
@@ -41,7 +40,6 @@ func NewLogBlobContext(blobPath string, rr *azblob.ReaderResponse) *LogBlobConte
 }
 
 func LogBlobContextFromWriteResponse(blobPath string, wr *azblob.WriteResponse) *LogBlobContext {
-
 
 	lc := &LogBlobContext{
 		BlobPath: blobPath,
@@ -77,7 +75,7 @@ func (lc *LogBlobContext) CopyTags() map[string]string {
 // The various metadata fields are populated from the blob store response
 // On return, the Data member contains the blob contents
 func (lc *LogBlobContext) ReadData(
-	ctx context.Context, store LogBlobReader, opts ...azblob.Option,
+	ctx context.Context, store Reader, opts ...azblob.Option,
 ) error {
 	var err error
 	var rr *azblob.ReaderResponse
@@ -87,7 +85,7 @@ func (lc *LogBlobContext) ReadData(
 }
 
 func (lc *LogBlobContext) ReadDataN(
-	ctx context.Context, readNMax int, store LogBlobReader, opts ...azblob.Option,
+	ctx context.Context, readNMax int, store Reader, opts ...azblob.Option,
 ) error {
 	var err error
 	var rr *azblob.ReaderResponse

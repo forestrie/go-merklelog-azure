@@ -13,7 +13,7 @@ import (
 
 func TestLastPrefixedBlob(t *testing.T) {
 	type args struct {
-		store LogBlobReader
+		store Reader
 	}
 	tests := []struct {
 		name        string
@@ -63,7 +63,7 @@ func TestLastPrefixedBlob(t *testing.T) {
 
 func TestPrefixedBlobLastN(t *testing.T) {
 	type args struct {
-		store LogBlobReader
+		store Reader
 		n     int
 	}
 	tests := []struct {
@@ -144,7 +144,7 @@ func TestPrefixedBlobLastN(t *testing.T) {
 	}
 }
 
-func newLastNBlobStore(itemCounts ...int) LogBlobReader {
+func newLastNBlobStore(itemCounts ...int) Reader {
 	series := newmockblobseries(itemCounts...)
 	return &mockLastNBlobStore{
 		series: series,

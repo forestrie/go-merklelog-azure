@@ -12,7 +12,7 @@ import (
 
 // BlobRead reads the blob of the given store.
 func BlobRead(
-	ctx context.Context, blobPath string, store LogBlobReader,
+	ctx context.Context, blobPath string, store Reader,
 	opts ...azblob.Option,
 ) (*azblob.ReaderResponse, []byte, error) {
 	rr, err := store.Reader(ctx, blobPath, opts...)
@@ -43,7 +43,7 @@ func BlobRead(
 }
 
 func BlobReadN(
-	ctx context.Context, readNMax int, blobPath string, store LogBlobReader,
+	ctx context.Context, readNMax int, blobPath string, store Reader,
 	opts ...azblob.Option,
 ) (*azblob.ReaderResponse, []byte, error) {
 	rr, err := store.Reader(ctx, blobPath, opts...)

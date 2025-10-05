@@ -12,7 +12,7 @@ var ErrBlobNotFound = errors.New("the blob was not found")
 // LastPrefixedBlob returns the details of last blob found under the prefix path
 // And the total number of blobs under the path.
 func LastPrefixedBlob(
-	ctx context.Context, store LogBlobReader, blobPrefixPath string,
+	ctx context.Context, store Reader, blobPrefixPath string,
 	opts ...azblob.Option,
 ) (LogBlobContext, uint32, error) {
 	bc := LogBlobContext{}
@@ -53,7 +53,7 @@ func LastPrefixedBlob(
 
 // FirstPrefixedBlob returns the first blob found under the prefix path
 func FirstPrefixedBlob(
-	ctx context.Context, store LogBlobReader, blobPrefixPath string,
+	ctx context.Context, store Reader, blobPrefixPath string,
 	opts ...azblob.Option,
 ) (LogBlobContext, error) {
 	bc := LogBlobContext{}
@@ -89,7 +89,7 @@ func FirstPrefixedBlob(
 // Un filled items are zero valued.
 func PrefixedBlobLastN(
 	ctx context.Context,
-	store LogBlobReader,
+	store Reader,
 	blobPrefixPath string,
 	n int,
 	opts ...azblob.Option,
