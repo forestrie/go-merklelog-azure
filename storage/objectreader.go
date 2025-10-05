@@ -83,11 +83,8 @@ func (r *CachingStore) MassifReadN(ctx context.Context, massifIndex uint32, n in
 	} else {
 		err = bc.ReadDataN(ctx, n, r.Store, azblob.WithGetTags())
 	}
-	if isAzureBlobNotFoundError(err) {
-		return nil, storage.ErrDoesNotExist
-	}
 	if err != nil {
-		return nil, translateAzureError(err, storage.ErrNotAvailable)
+		return nil, err
 	}
 	// Note: we store the data in the massif place because any reference to the massif will read the rest of the data,
 	// but the start is guaranteed to be available after this call.
