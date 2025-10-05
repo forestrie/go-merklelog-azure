@@ -10,7 +10,7 @@ require (
 	github.com/forestrie/go-merklelog-datatrails v0.0.0-00010101000000-000000000000
 	github.com/forestrie/go-merklelog/massifs v0.0.2
 	github.com/robinbryce/go-merklelog-provider-testing v0.0.0-00010101000000-000000000000
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
@@ -71,7 +71,7 @@ replace github.com/forestrie/go-merklelog-datatrails => ../go-merklelog-datatrai
 
 replace github.com/forestrie/go-merklelog/massifs => ../go-merklelog/massifs
 
-replace github.com/datatrails/go-merklelog/mmr => ../go-merklelog/mmr
+replace github.com/forestrie/go-merklelog/mmr => ../go-merklelog/mmr
 
 replace github.com/datatrails/go-datatrails-common => ../go-datatrails-common
 
