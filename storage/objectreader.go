@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/datatrails/go-datatrails-common/azblob"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
+	"github.com/forestrie/go-merklelog/massifs/storage"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
 )
 

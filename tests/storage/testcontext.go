@@ -7,8 +7,8 @@ import (
 
 	"github.com/datatrails/go-datatrails-common/azblob"
 	"github.com/datatrails/go-datatrails-common/logger"
-	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/forestrie/go-merklelog/massifs"
+	"github.com/forestrie/go-merklelog/massifs/storage"
 	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
 	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
 	"github.com/robinbryce/go-merklelog-provider-testing/providers"

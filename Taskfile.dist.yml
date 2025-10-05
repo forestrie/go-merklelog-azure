@@ -30,8 +30,8 @@ tasks:
         go 1.24.4
         use (
         	./go-datatrails-common
-        	./go-datatrails-merklelog/massifs
-        	./go-datatrails-merklelog/mmr
+        	./go-merklelog/massifs
+        	./go-merklelog/mmr
         	./go-datatrails-serialization/eventsv1
         	./go-datatrails-simplehash
         	./go-merklelog-azure

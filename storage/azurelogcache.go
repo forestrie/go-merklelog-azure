@@ -1,8 +1,8 @@
 package storage
 
 import (
-	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/forestrie/go-merklelog/massifs"
+	"github.com/forestrie/go-merklelog/massifs/storage"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
 )
 

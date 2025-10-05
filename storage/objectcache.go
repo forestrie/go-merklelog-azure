@@ -2,8 +2,8 @@ package storage
 
 /*
 import (
-	"github.com/datatrails/go-datatrails-merklelog/massifs"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
+	"github.com/forestrie/go-merklelog/massifs"
+	"github.com/forestrie/go-merklelog/massifs/storage"
 )
 
 func (r *CachingStore) Start(massifIndex uint32) (*massifs.MassifStart, bool, error) {

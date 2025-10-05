@@ -8,8 +8,8 @@ import (
 	"net/http"
 
 	azStorageBlob "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/datatrails/go-datatrails-merklelog/massifs/storage"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
+	"github.com/forestrie/go-merklelog/massifs/storage"
 	"github.com/robinbryce/go-merklelog-azure/blobs"
 )
 
