@@ -1,4 +1,4 @@
-name: push
+name: CI
 
 on: [push]
 
@@ -38,3 +38,4 @@ jobs:
         run: |
           # Note: it is by design that we don't use the builder
           task test:integration
+
