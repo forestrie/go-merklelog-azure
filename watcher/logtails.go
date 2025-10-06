@@ -5,7 +5,7 @@ import (
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/forestrie/go-merklelog/massifs/storage"
 	"github.com/forestrie/go-merklelog/massifs/watcher"
-	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
+	azstorage "github.com/forestrie/go-merklelog-azure/storage"
 )
 
 type LogIDFromPathFunc func(storagePath string) storage.LogID

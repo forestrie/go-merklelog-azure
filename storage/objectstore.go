@@ -10,7 +10,7 @@ import (
 	azStorageBlob "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/forestrie/go-merklelog/massifs/storage"
-	"github.com/robinbryce/go-merklelog-azure/blobs"
+	"github.com/forestrie/go-merklelog-azure/blobs"
 )
 
 // TODO: split this into ReaderOptions, CommitterOptions, WriterOptions as needed

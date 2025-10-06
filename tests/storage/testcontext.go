@@ -9,9 +9,9 @@ import (
 	"github.com/datatrails/go-datatrails-common/logger"
 	"github.com/forestrie/go-merklelog/massifs"
 	"github.com/forestrie/go-merklelog/massifs/storage"
-	azstorage "github.com/robinbryce/go-merklelog-azure/storage"
-	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
-	"github.com/robinbryce/go-merklelog-provider-testing/providers"
+	azstorage "github.com/forestrie/go-merklelog-azure/storage"
+	"github.com/forestrie/go-merklelog-provider-testing/mmrtesting"
+	"github.com/forestrie/go-merklelog-provider-testing/providers"
 	"github.com/stretchr/testify/require"
 )
 

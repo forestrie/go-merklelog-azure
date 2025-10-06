@@ -7,7 +7,7 @@ import (
 	"github.com/datatrails/go-datatrails-common/azblob"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/forestrie/go-merklelog/massifs/storage"
-	"github.com/robinbryce/go-merklelog-azure/blobs"
+	"github.com/forestrie/go-merklelog-azure/blobs"
 )
 
 func (r *CachingStore) HasCapability(feature storage.StorageFeature) bool {

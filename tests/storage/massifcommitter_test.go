@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/datatrails/go-datatrails-common/logger"
-	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
-	"github.com/robinbryce/go-merklelog-provider-testing/providers"
+	"github.com/forestrie/go-merklelog-provider-testing/mmrtesting"
+	"github.com/forestrie/go-merklelog-provider-testing/providers"
 )
 
 // TestMassifCommitter_firstMassif covers creation of the first massive blob related conditions

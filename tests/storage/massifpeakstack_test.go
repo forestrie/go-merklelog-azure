@@ -5,8 +5,8 @@ import (
 
 	"github.com/datatrails/go-datatrails-common/logger"
 
-	"github.com/robinbryce/go-merklelog-provider-testing/mmrtesting"
-	"github.com/robinbryce/go-merklelog-provider-testing/providers"
+	"github.com/forestrie/go-merklelog-provider-testing/mmrtesting"
+	"github.com/forestrie/go-merklelog-provider-testing/providers"
 )
 
 func NewStoragePeakStackBuilderFactory(tc *TestContext) providers.BuilderFactory {

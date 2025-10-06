@@ -1,4 +1,4 @@
-module github.com/robinbryce/go-merklelog-azure
+module github.com/forestrie/go-merklelog-azure
 
 go 1.24.0
 
@@ -8,8 +8,8 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
 	github.com/datatrails/go-datatrails-common v0.30.0
 	github.com/forestrie/go-merklelog-datatrails v0.0.0-00010101000000-000000000000
+	github.com/forestrie/go-merklelog-provider-testing v0.0.0-00010101000000-000000000000
 	github.com/forestrie/go-merklelog/massifs v0.0.2
-	github.com/robinbryce/go-merklelog-provider-testing v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -49,7 +49,7 @@ require (
 	github.com/ldclabs/cose/go v0.0.0-20221214142927-d22c1cfc2154 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/veraison/go-cose v1.1.0 // indirect
+	github.com/veraison/go-cose v1.3.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/zeebo/bencode v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -65,13 +65,14 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/robinbryce/go-merklelog-provider-testing => ../go-merklelog-provider-testing
+replace github.com/forestrie/go-merklelog-provider-testing => ../go-merklelog-provider-testing
 
 replace github.com/forestrie/go-merklelog-datatrails => ../go-merklelog-datatrails
 
 replace github.com/forestrie/go-merklelog/massifs => ../go-merklelog/massifs
 
 replace github.com/forestrie/go-merklelog/mmr => ../go-merklelog/mmr
+replace github.com/forestrie/go-merklelog-azure => ../go-merklelog-azure
 
 replace github.com/datatrails/go-datatrails-common => ../go-datatrails-common
 

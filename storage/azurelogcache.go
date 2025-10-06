@@ -3,7 +3,7 @@ package storage
 import (
 	"github.com/forestrie/go-merklelog/massifs"
 	"github.com/forestrie/go-merklelog/massifs/storage"
-	"github.com/robinbryce/go-merklelog-azure/blobs"
+	"github.com/forestrie/go-merklelog-azure/blobs"
 )
 
 type NativeContexts struct {
