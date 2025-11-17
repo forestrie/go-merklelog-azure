@@ -108,6 +108,10 @@ func (lc *LogBlobContext) processResponse(rr *azblob.ReaderResponse, err error) 
 				return fmt.Errorf("%w: %v", storage.ErrDoesNotExist, err)
 			case http.StatusPreconditionFailed:
 				return fmt.Errorf("%w: %v", storage.ErrContentOC, err)
+			case http.StatusForbidden:
+				return fmt.Errorf("%w: %v", storage.ErrNotAvailable, err)
+			case http.StatusTooManyRequests, http.StatusServiceUnavailable:
+				return fmt.Errorf("%w: %v", storage.ErrNotAvailable, err)
 			default:
 				return fmt.Errorf("unexpected status code %d: %v", resp.StatusCode, err)
 			}

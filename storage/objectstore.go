@@ -169,7 +169,7 @@ func (r *CachingStore) reset() {
 func (r *CachingStore) lastPrefixedObject(ctx context.Context, prefixPath string) (*blobs.LogBlobContext, uint32, error) {
 	bc, count, err := blobs.LastPrefixedBlob(ctx, r.Store, prefixPath)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, translateAzureError(err, err)
 	}
 
 	if count == 0 {
@@ -187,7 +187,7 @@ func (r *CachingStore) lastObject(ctx context.Context, c *LogCache, otype storag
 	case storage.ObjectMassifStart, storage.ObjectMassifData:
 		bc, massifIndex, err := r.lastPrefixedObject(ctx, prefixPath)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("failed to get last prefixed object for massif: %w", err)
 		}
 		r.Selected.Az.Massifs[massifIndex] = bc
 		r.Selected.LastMassifIndex = massifIndex
@@ -195,7 +195,7 @@ func (r *CachingStore) lastObject(ctx context.Context, c *LogCache, otype storag
 	case storage.ObjectCheckpoint:
 		bc, massifIndex, err := r.lastPrefixedObject(ctx, prefixPath)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("failed to get last prefixed object for checkpoint: %w", err)
 		}
 		c.Az.Checkpoints[massifIndex] = bc
 		c.LastCheckpointIndex = massifIndex
@@ -274,13 +274,15 @@ func translateAzurePutError(err error) error {
 		case http.StatusNotFound:
 			return storage.ErrDoesNotExist
 		case http.StatusForbidden:
-			return storage.ErrNotAvailable // Permission denied
+			return fmt.Errorf("%w: permission denied: %v", storage.ErrNotAvailable, err)
 		case http.StatusTooManyRequests, http.StatusServiceUnavailable:
-			return storage.ErrNotAvailable // Throttling or service unavailable
+			return fmt.Errorf("%w: throttling or service unavailable: %v", storage.ErrNotAvailable, err)
 		default:
-			return storage.ErrNotAvailable // Generic error
+			// Preserve the original error for debugging unexpected status codes
+			return fmt.Errorf("%w: unexpected status code %d: %v", storage.ErrNotAvailable, resp.StatusCode, err)
 		}
 	}
 
-	return storage.ErrNotAvailable // Fallback for unknown errors
+	// For non-Azure errors, preserve the original error
+	return fmt.Errorf("%w: %v", storage.ErrNotAvailable, err)
 }
