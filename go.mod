@@ -72,10 +72,9 @@ replace github.com/forestrie/go-merklelog-datatrails => ../go-merklelog-datatrai
 replace github.com/forestrie/go-merklelog/massifs => ../go-merklelog/massifs
 
 replace github.com/forestrie/go-merklelog/mmr => ../go-merklelog/mmr
+
 replace github.com/forestrie/go-merklelog-azure => ../go-merklelog-azure
 
 replace github.com/datatrails/go-datatrails-common => ../go-datatrails-common
-
-replace github.com/datatrails/go-datatrails-simplehash => ../go-datatrails-simplehash
 
 replace github.com/datatrails/go-datatrails-serialization/eventsv1 => ../go-datatrails-serialization/eventsv1
