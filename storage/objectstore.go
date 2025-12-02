@@ -205,6 +205,60 @@ func (r *CachingStore) lastObject(ctx context.Context, c *LogCache, otype storag
 	}
 }
 
+// lastObjectWithHeight finds the last object using the new v2 path format.
+func (r *CachingStore) lastObjectWithHeight(ctx context.Context, c *LogCache, massifHeight uint8, otype storage.ObjectType) (uint32, error) {
+	// Get base prefix from core function
+	basePrefix, err := datatrails.StorageObjectPrefixWithHeight(c.LogID, massifHeight, otype)
+	if err != nil {
+		return 0, err
+	}
+
+	// Add Arbor service prefix (Azure may use different prefix in production)
+	var servicePrefix string
+	switch otype {
+	case storage.ObjectMassifStart, storage.ObjectMassifData, storage.ObjectPathMassifs:
+		servicePrefix = datatrails.V2MerklelogMassifsPrefix + "/"
+	case storage.ObjectCheckpoint, storage.ObjectPathCheckpoints:
+		servicePrefix = datatrails.V2MerklelogCheckpointsPrefix + "/"
+	default:
+		return 0, fmt.Errorf("unsupported object type %v", otype)
+	}
+
+	// Combine service prefix with base format
+	fullPrefix := servicePrefix + basePrefix
+
+	switch otype {
+	case storage.ObjectMassifStart, storage.ObjectMassifData:
+		bc, massifIndex, err := r.lastPrefixedObject(ctx, fullPrefix)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get last prefixed object for massif: %w", err)
+		}
+		r.Selected.Az.Massifs[massifIndex] = bc
+		r.Selected.LastMassifIndex = massifIndex
+		return massifIndex, nil
+	case storage.ObjectCheckpoint:
+		bc, massifIndex, err := r.lastPrefixedObject(ctx, fullPrefix)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get last prefixed object for checkpoint: %w", err)
+		}
+		c.Az.Checkpoints[massifIndex] = bc
+		c.LastCheckpointIndex = massifIndex
+		return massifIndex, nil
+	default:
+		return 0, fmt.Errorf("unsupported object type %v", otype)
+	}
+}
+
+// HeadIndexWithHeight finds the last object using the new v2 path format.
+func (r *CachingStore) HeadIndexWithHeight(ctx context.Context, massifHeight uint8, otype storage.ObjectType) (uint32, error) {
+	c := r.Selected
+	if c == nil {
+		return 0, storage.ErrLogNotSelected
+	}
+
+	return r.lastObjectWithHeight(ctx, c, massifHeight, otype)
+}
+
 // Helper functions for error translation
 
 // isAzureBlobNotFoundError checks if the error indicates a blob was not found

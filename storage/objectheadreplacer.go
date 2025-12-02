@@ -6,6 +6,7 @@ import (
 
 	"github.com/datatrails/go-datatrails-common/azblob"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
+	"github.com/forestrie/go-merklelog/massifs"
 	"github.com/forestrie/go-merklelog/massifs/storage"
 	"github.com/forestrie/go-merklelog-azure/blobs"
 )
@@ -38,13 +39,58 @@ func (r *CachingStore) Put(
 	if ok {
 		storagePath = n.BlobPath
 	} else {
-		prefix, err := datatrails.StorageObjectPrefix(r.Selected.LogID, ty)
-		if err != nil {
-			return fmt.Errorf("failed to get prefix path for type %v: %w", ty, err)
+		// Try to use v2 format if we can extract massifHeight
+		var massifHeight uint8
+		var useV2 bool
+
+		switch ty {
+		case storage.ObjectMassifStart, storage.ObjectMassifData:
+			// Extract massifHeight from MassifStart header (byte 27)
+			if len(data) >= int(massifs.MassifStartKeyMassifHeightFirstByte+1) {
+				massifHeight = data[massifs.MassifStartKeyMassifHeightFirstByte]
+				useV2 = true
+			}
+		case storage.ObjectCheckpoint:
+			// For checkpoints, we don't have massifHeight in the data
+			// Fall back to v1 format for now
+			useV2 = false
+		default:
+			useV2 = false
 		}
-		storagePath, err = storage.ObjectPath(prefix, r.Selected.LogID, massifIndex, ty)
-		if err != nil {
-			return fmt.Errorf("failed to get storage path for massif %d: %w", massifIndex, err)
+
+		if useV2 {
+			// Use v2 format
+			basePrefix, err := datatrails.StorageObjectPrefixWithHeight(r.Selected.LogID, massifHeight, ty)
+			if err != nil {
+				return fmt.Errorf("failed to get prefix path for type %v: %w", ty, err)
+			}
+
+			// Add Arbor service prefix (Azure may use different prefix in production)
+			var servicePrefix string
+			switch ty {
+			case storage.ObjectMassifStart, storage.ObjectMassifData, storage.ObjectPathMassifs:
+				servicePrefix = datatrails.V2MerklelogMassifsPrefix + "/"
+			case storage.ObjectCheckpoint, storage.ObjectPathCheckpoints:
+				servicePrefix = datatrails.V2MerklelogCheckpointsPrefix + "/"
+			default:
+				return fmt.Errorf("unsupported object type: %v", ty)
+			}
+
+			fullPrefix := servicePrefix + basePrefix
+			storagePath, err = storage.ObjectPath(fullPrefix, r.Selected.LogID, massifIndex, ty)
+			if err != nil {
+				return fmt.Errorf("failed to get storage path for massif %d: %w", massifIndex, err)
+			}
+		} else {
+			// Fall back to v1 format
+			prefix, err := datatrails.StorageObjectPrefix(r.Selected.LogID, ty)
+			if err != nil {
+				return fmt.Errorf("failed to get prefix path for type %v: %w", ty, err)
+			}
+			storagePath, err = storage.ObjectPath(prefix, r.Selected.LogID, massifIndex, ty)
+			if err != nil {
+				return fmt.Errorf("failed to get storage path for massif %d: %w", massifIndex, err)
+			}
 		}
 	}
 

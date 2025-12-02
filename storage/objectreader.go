@@ -63,6 +63,41 @@ func (r *CachingStore) ObjectPath(massifIndex uint32, otype storage.ObjectType) 
 	return storagePath, nil
 }
 
+// ObjectPathWithHeight constructs the storage path using the new v2 path format.
+// Note: Azure storage may use different prefixes than Arbor/Canopy - this uses Arbor prefixes for consistency.
+func (r *CachingStore) ObjectPathWithHeight(massifHeight uint8, massifIndex uint32, otype storage.ObjectType) (string, error) {
+	c := r.Selected
+	if c == nil {
+		return "", storage.ErrLogNotSelected
+	}
+
+	// Get base prefix from core function
+	basePrefix, err := datatrails.StorageObjectPrefixWithHeight(c.LogID, massifHeight, otype)
+	if err != nil {
+		return "", fmt.Errorf("failed to get prefix path for type %v: %w", otype, err)
+	}
+
+	// Add Arbor service prefix (Azure may use different prefix in production)
+	var servicePrefix string
+	switch otype {
+	case storage.ObjectMassifStart, storage.ObjectMassifData, storage.ObjectPathMassifs:
+		servicePrefix = datatrails.V2MerklelogMassifsPrefix + "/"
+	case storage.ObjectCheckpoint, storage.ObjectPathCheckpoints:
+		servicePrefix = datatrails.V2MerklelogCheckpointsPrefix + "/"
+	default:
+		return "", fmt.Errorf("unsupported object type: %v", otype)
+	}
+
+	// Combine service prefix with base format
+	fullPrefix := servicePrefix + basePrefix
+
+	storagePath, err := storage.ObjectPath(fullPrefix, c.LogID, massifIndex, otype)
+	if err != nil {
+		return "", fmt.Errorf("failed to get storage path for massif %d: %w", massifIndex, err)
+	}
+	return storagePath, nil
+}
+
 func (r *CachingStore) MassifReadN(ctx context.Context, massifIndex uint32, n int) ([]byte, error) {
 	var err error
 	var storagePath string
