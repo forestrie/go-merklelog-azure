@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/datatrails/go-datatrails-common/azblob"
+	"github.com/forestrie/go-merklelog-azure/blobs"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/forestrie/go-merklelog/massifs/storage"
-	"github.com/forestrie/go-merklelog-azure/blobs"
 )
 
 // HeadIndex finds the last object and returns it's index without reading the
@@ -72,7 +72,7 @@ func (r *CachingStore) ObjectPathWithHeight(massifHeight uint8, massifIndex uint
 	}
 
 	// Get base prefix from core function
-	basePrefix, err := datatrails.StorageObjectPrefixWithHeight(c.LogID, massifHeight, otype)
+	basePrefix, err := storage.StorageObjectPrefixWithHeight(c.LogID, massifHeight, otype)
 	if err != nil {
 		return "", fmt.Errorf("failed to get prefix path for type %v: %w", otype, err)
 	}
@@ -81,9 +81,9 @@ func (r *CachingStore) ObjectPathWithHeight(massifHeight uint8, massifIndex uint
 	var servicePrefix string
 	switch otype {
 	case storage.ObjectMassifStart, storage.ObjectMassifData, storage.ObjectPathMassifs:
-		servicePrefix = datatrails.V2MerklelogMassifsPrefix + "/"
+		servicePrefix = storage.V2MerklelogMassifsPrefix + "/"
 	case storage.ObjectCheckpoint, storage.ObjectPathCheckpoints:
-		servicePrefix = datatrails.V2MerklelogCheckpointsPrefix + "/"
+		servicePrefix = storage.V2MerklelogCheckpointsPrefix + "/"
 	default:
 		return "", fmt.Errorf("unsupported object type: %v", otype)
 	}

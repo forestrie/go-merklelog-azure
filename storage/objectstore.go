@@ -8,9 +8,9 @@ import (
 	"net/http"
 
 	azStorageBlob "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/forestrie/go-merklelog-azure/blobs"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/forestrie/go-merklelog/massifs/storage"
-	"github.com/forestrie/go-merklelog-azure/blobs"
 )
 
 // TODO: split this into ReaderOptions, CommitterOptions, WriterOptions as needed
@@ -208,7 +208,7 @@ func (r *CachingStore) lastObject(ctx context.Context, c *LogCache, otype storag
 // lastObjectWithHeight finds the last object using the new v2 path format.
 func (r *CachingStore) lastObjectWithHeight(ctx context.Context, c *LogCache, massifHeight uint8, otype storage.ObjectType) (uint32, error) {
 	// Get base prefix from core function
-	basePrefix, err := datatrails.StorageObjectPrefixWithHeight(c.LogID, massifHeight, otype)
+	basePrefix, err := storage.StorageObjectPrefixWithHeight(c.LogID, massifHeight, otype)
 	if err != nil {
 		return 0, err
 	}
@@ -217,9 +217,9 @@ func (r *CachingStore) lastObjectWithHeight(ctx context.Context, c *LogCache, ma
 	var servicePrefix string
 	switch otype {
 	case storage.ObjectMassifStart, storage.ObjectMassifData, storage.ObjectPathMassifs:
-		servicePrefix = datatrails.V2MerklelogMassifsPrefix + "/"
+		servicePrefix = storage.V2MerklelogMassifsPrefix + "/"
 	case storage.ObjectCheckpoint, storage.ObjectPathCheckpoints:
-		servicePrefix = datatrails.V2MerklelogCheckpointsPrefix + "/"
+		servicePrefix = storage.V2MerklelogCheckpointsPrefix + "/"
 	default:
 		return 0, fmt.Errorf("unsupported object type %v", otype)
 	}

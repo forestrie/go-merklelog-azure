@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	"github.com/datatrails/go-datatrails-common/azblob"
+	"github.com/forestrie/go-merklelog-azure/blobs"
 	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/forestrie/go-merklelog/massifs"
 	"github.com/forestrie/go-merklelog/massifs/storage"
-	"github.com/forestrie/go-merklelog-azure/blobs"
 )
 
 func (r *CachingStore) HasCapability(feature storage.StorageFeature) bool {
@@ -60,7 +60,7 @@ func (r *CachingStore) Put(
 
 		if useV2 {
 			// Use v2 format
-			basePrefix, err := datatrails.StorageObjectPrefixWithHeight(r.Selected.LogID, massifHeight, ty)
+			basePrefix, err := storage.StorageObjectPrefixWithHeight(r.Selected.LogID, massifHeight, ty)
 			if err != nil {
 				return fmt.Errorf("failed to get prefix path for type %v: %w", ty, err)
 			}
@@ -69,9 +69,9 @@ func (r *CachingStore) Put(
 			var servicePrefix string
 			switch ty {
 			case storage.ObjectMassifStart, storage.ObjectMassifData, storage.ObjectPathMassifs:
-				servicePrefix = datatrails.V2MerklelogMassifsPrefix + "/"
+				servicePrefix = storage.V2MerklelogMassifsPrefix + "/"
 			case storage.ObjectCheckpoint, storage.ObjectPathCheckpoints:
-				servicePrefix = datatrails.V2MerklelogCheckpointsPrefix + "/"
+				servicePrefix = storage.V2MerklelogCheckpointsPrefix + "/"
 			default:
 				return fmt.Errorf("unsupported object type: %v", ty)
 			}
