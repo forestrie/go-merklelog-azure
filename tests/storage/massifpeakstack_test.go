@@ -10,8 +10,8 @@ import (
 )
 
 func NewStoragePeakStackBuilderFactory(tc *TestContext) providers.BuilderFactory {
-	return func() mmrtesting.LogBuilder {
-		return NewLogBuilder(tc)
+	return func(massifHeight uint8) mmrtesting.LogBuilder {
+		return NewLogBuilder(tc, massifHeight)
 	}
 }
 
@@ -27,8 +27,8 @@ func TestPeakStack_Height4Massif2to3Size63(t *testing.T) {
 	logger.New("INFO")
 	tc := NewTestContext(t, nil, mmrtesting.WithTestLabelPrefix("TestPeakStack_Height4Massif2to3Size63"))
 
-	factory := func() mmrtesting.LogBuilder {
-		return NewLogBuilder(tc)
+	factory := func(massifHeight uint8) mmrtesting.LogBuilder {
+		return NewLogBuilder(tc, massifHeight)
 	}
 
 	// MassifHeight := uint8(4)

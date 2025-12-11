@@ -13,9 +13,19 @@ import (
 )
 
 func mkmassfpath(uuidstr string, i uint32) string {
-	return fmt.Sprintf("v1/mmrs/tenant/%s/0/massifs/%020d.log", uuidstr, i)
+	// Use v2 format for new tests
+	return fmt.Sprintf("v2/merklelog/massifs/14/%s/%016d.log", uuidstr, i)
 }
 func mksealpath(uuidstr string, i uint32) string {
+	// Use v2 format for new tests
+	return fmt.Sprintf("v2/merklelog/checkpoints/14/%s/%016d.sth", uuidstr, i)
+}
+
+// Old v1 format helpers for backward compatibility tests
+func mkmassfpathV1(uuidstr string, i uint32) string {
+	return fmt.Sprintf("v1/mmrs/tenant/%s/0/massifs/%020d.log", uuidstr, i)
+}
+func mksealpathV1(uuidstr string, i uint32) string {
 	return fmt.Sprintf("v1/mmrs/tenant/%s/0/massifseals/%020d.sth", uuidstr, i)
 }
 
@@ -36,7 +46,9 @@ func Test_LogTailColatePage(t *testing.T) {
 		lc := NewLogTailCollator(
 			func(storagePath string) storage.LogID {
 				return storage.ParsePrefixedLogID("tenant/", storagePath)
-			}, storage.ObjectIndexFromPath)
+			}, func(storagePath string) (storage.ObjectType, uint32, error) {
+				return storage.ObjectIndexFromPath(storagePath)
+			})
 
 		var page []*azblob.FilterBlobItem
 		page = make([]*azblob.FilterBlobItem, 0, len(paths))
@@ -65,13 +77,26 @@ func Test_LogTailColatePage(t *testing.T) {
 		sealLogs   []string
 	}{
 		{
-			name: "two massifs, one seal",
+			name: "two massifs, one seal (v2 format)",
 			args: args{
 				mkcollator([]string{
 					mkmassfpath(suuida, 0),
 					mkmassfpath(suuida, 1),
 					mksealpath(suuidb, 0),
 					mkmassfpath(suuidc, 0),
+				}),
+			},
+			massifLogs: []string{string(logida), string(logidc)},
+			sealLogs:   []string{string(logidb)},
+		},
+		{
+			name: "two massifs, one seal (v1 format)",
+			args: args{
+				mkcollator([]string{
+					mkmassfpathV1(suuida, 0),
+					mkmassfpathV1(suuida, 1),
+					mksealpathV1(suuidb, 0),
+					mkmassfpathV1(suuidc, 0),
 				}),
 			},
 			massifLogs: []string{string(logida), string(logidc)},

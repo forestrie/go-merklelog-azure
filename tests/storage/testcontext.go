@@ -7,11 +7,11 @@ import (
 
 	"github.com/datatrails/go-datatrails-common/azblob"
 	"github.com/datatrails/go-datatrails-common/logger"
-	"github.com/forestrie/go-merklelog/massifs"
-	"github.com/forestrie/go-merklelog/massifs/storage"
 	azstorage "github.com/forestrie/go-merklelog-azure/storage"
 	"github.com/forestrie/go-merklelog-provider-testing/mmrtesting"
 	"github.com/forestrie/go-merklelog-provider-testing/providers"
+	"github.com/forestrie/go-merklelog/massifs"
+	"github.com/forestrie/go-merklelog/massifs/storage"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,15 +53,10 @@ func (c *TestContext) GetT() *testing.T {
 	return c.T
 }
 
-func NewLogBuilder(tc *TestContext) mmrtesting.LogBuilder {
+func NewLogBuilder(tc *TestContext, massifHeight uint8) mmrtesting.LogBuilder {
 	azopts := tc.AzDefaultOpts()
 
-	store := &azstorage.CachingStore{
-		Store:       azopts.Store,
-		StoreWriter: azopts.StoreWriter,
-	}
-
-	err := store.Init(tc.T.Context())
+	store, err := azstorage.NewStore(tc.T.Context(), azopts, massifHeight)
 	require.NoError(tc.T, err)
 
 	builder := mmrtesting.LogBuilder{
@@ -83,8 +78,8 @@ func NewLogBuilder(tc *TestContext) mmrtesting.LogBuilder {
 }
 
 func NewBuilderFactory(tc *TestContext) providers.BuilderFactory {
-	return func() mmrtesting.LogBuilder {
-		return NewLogBuilder(tc)
+	return func(massifHeight uint8) mmrtesting.LogBuilder {
+		return NewLogBuilder(tc, massifHeight)
 	}
 }
 

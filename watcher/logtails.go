@@ -2,13 +2,9 @@ package watcher
 
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/forestrie/go-merklelog-datatrails/datatrails"
-	"github.com/forestrie/go-merklelog/massifs/storage"
-	"github.com/forestrie/go-merklelog/massifs/watcher"
 	azstorage "github.com/forestrie/go-merklelog-azure/storage"
+	"github.com/forestrie/go-merklelog/massifs/watcher"
 )
-
-type LogIDFromPathFunc func(storagePath string) storage.LogID
 
 // LogTailCollator is used to collate the most recently modified massif blob paths for all tenants in a given time horizon
 type LogTailCollator struct {
@@ -17,13 +13,13 @@ type LogTailCollator struct {
 
 // NewLogTailCollator creates a log tail collator
 func NewLogTailCollator(
-	path2LogID LogIDFromPathFunc,
-	path2ObjectIndex storage.ObjectIndexFromPathFunc,
+	path2LogID watcher.LogIDFromPathFunc,
+	path2ObjectIndex watcher.ObjectIndexFromPathFunc,
 ) LogTailCollator {
 	return LogTailCollator{
 		LogTailCollator: watcher.NewLogTailCollator(
-			datatrails.TenantID2LogID,
-			storage.ObjectIndexFromPath,
+			path2LogID,
+			path2ObjectIndex,
 		),
 	}
 }

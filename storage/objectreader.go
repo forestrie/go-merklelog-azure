@@ -6,19 +6,18 @@ import (
 
 	"github.com/datatrails/go-datatrails-common/azblob"
 	"github.com/forestrie/go-merklelog-azure/blobs"
-	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/forestrie/go-merklelog/massifs/storage"
 )
 
 // HeadIndex finds the last object and returns it's index without reading the
-// data.
+// data. Uses the v2 path format with the massifHeight stored in the CachingStore instance.
 func (r *CachingStore) HeadIndex(ctx context.Context, otype storage.ObjectType) (uint32, error) {
 	c := r.Selected
 	if c == nil {
 		return 0, storage.ErrLogNotSelected
 	}
 
-	return r.lastObject(ctx, c, otype)
+	return r.lastObjectWithHeight(ctx, c, r.massifHeight, otype)
 }
 
 func (r *CachingStore) MassifData(massifIndex uint32) ([]byte, bool, error) {
@@ -46,33 +45,15 @@ func (r *CachingStore) CheckpointData(massifIndex uint32) ([]byte, bool, error) 
 	return n.Data, true, nil
 }
 
+// ObjectPath constructs the storage path using the v2 path format with the massifHeight stored in the CachingStore instance.
 func (r *CachingStore) ObjectPath(massifIndex uint32, otype storage.ObjectType) (string, error) {
 	c := r.Selected
 	if c == nil {
 		return "", storage.ErrLogNotSelected
 	}
-	prefix, err := datatrails.StorageObjectPrefix(c.LogID, otype)
-	if err != nil {
-		return "", fmt.Errorf("failed to get prefix path for type %v: %w", otype, err)
-	}
 
-	storagePath, err := storage.ObjectPath(prefix, c.LogID, massifIndex, otype)
-	if err != nil {
-		return "", fmt.Errorf("failed to get storage path for massif %d: %w", massifIndex, err)
-	}
-	return storagePath, nil
-}
-
-// ObjectPathWithHeight constructs the storage path using the new v2 path format.
-// Note: Azure storage may use different prefixes than Arbor/Canopy - this uses Arbor prefixes for consistency.
-func (r *CachingStore) ObjectPathWithHeight(massifHeight uint8, massifIndex uint32, otype storage.ObjectType) (string, error) {
-	c := r.Selected
-	if c == nil {
-		return "", storage.ErrLogNotSelected
-	}
-
-	// Get base prefix from core function
-	basePrefix, err := storage.StorageObjectPrefixWithHeight(c.LogID, massifHeight, otype)
+	// Get base prefix from core function using stored massifHeight
+	basePrefix, err := storage.StorageObjectPrefixWithHeight(c.LogID, r.massifHeight, otype)
 	if err != nil {
 		return "", fmt.Errorf("failed to get prefix path for type %v: %w", otype, err)
 	}

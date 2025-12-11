@@ -9,7 +9,6 @@ import (
 
 	azStorageBlob "github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/forestrie/go-merklelog-azure/blobs"
-	"github.com/forestrie/go-merklelog-datatrails/datatrails"
 	"github.com/forestrie/go-merklelog/massifs/storage"
 )
 
@@ -20,17 +19,18 @@ type Options struct {
 }
 
 type CachingStore struct {
-	Store       azureReader
-	StoreWriter azureWriter
+	Store        azureReader
+	StoreWriter  azureWriter
+	massifHeight uint8
 
 	LogCache map[string]*LogCache
 	Selected *LogCache
 }
 
 func NewStore(
-	ctx context.Context, opts Options,
+	ctx context.Context, opts Options, massifHeight uint8,
 ) (*CachingStore, error) {
-	r, err := MakeCachingStore(ctx, opts)
+	r, err := MakeCachingStore(ctx, opts, massifHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -38,12 +38,13 @@ func NewStore(
 }
 
 func MakeCachingStore(
-	ctx context.Context, opts Options,
+	ctx context.Context, opts Options, massifHeight uint8,
 ) (CachingStore, error) {
 
 	cachingReader := CachingStore{
-		Store:       opts.Store,
-		StoreWriter: opts.StoreWriter,
+		Store:        opts.Store,
+		StoreWriter:  opts.StoreWriter,
+		massifHeight: massifHeight,
 	}
 
 	if err := cachingReader.Init(ctx); err != nil {
@@ -178,34 +179,7 @@ func (r *CachingStore) lastPrefixedObject(ctx context.Context, prefixPath string
 	return &bc, uint32(count - 1), nil
 }
 
-func (r *CachingStore) lastObject(ctx context.Context, c *LogCache, otype storage.ObjectType) (uint32, error) {
-	prefixPath, err := datatrails.StorageObjectPrefix(c.LogID, otype)
-	if err != nil {
-		return 0, err
-	}
-	switch otype {
-	case storage.ObjectMassifStart, storage.ObjectMassifData:
-		bc, massifIndex, err := r.lastPrefixedObject(ctx, prefixPath)
-		if err != nil {
-			return 0, fmt.Errorf("failed to get last prefixed object for massif: %w", err)
-		}
-		r.Selected.Az.Massifs[massifIndex] = bc
-		r.Selected.LastMassifIndex = massifIndex
-		return massifIndex, nil
-	case storage.ObjectCheckpoint:
-		bc, massifIndex, err := r.lastPrefixedObject(ctx, prefixPath)
-		if err != nil {
-			return 0, fmt.Errorf("failed to get last prefixed object for checkpoint: %w", err)
-		}
-		c.Az.Checkpoints[massifIndex] = bc
-		c.LastCheckpointIndex = massifIndex
-		return massifIndex, nil
-	default:
-		return 0, fmt.Errorf("unsupported object type %v", otype)
-	}
-}
-
-// lastObjectWithHeight finds the last object using the new v2 path format.
+// lastObjectWithHeight finds the last object using the v2 path format.
 func (r *CachingStore) lastObjectWithHeight(ctx context.Context, c *LogCache, massifHeight uint8, otype storage.ObjectType) (uint32, error) {
 	// Get base prefix from core function
 	basePrefix, err := storage.StorageObjectPrefixWithHeight(c.LogID, massifHeight, otype)
@@ -247,16 +221,6 @@ func (r *CachingStore) lastObjectWithHeight(ctx context.Context, c *LogCache, ma
 	default:
 		return 0, fmt.Errorf("unsupported object type %v", otype)
 	}
-}
-
-// HeadIndexWithHeight finds the last object using the new v2 path format.
-func (r *CachingStore) HeadIndexWithHeight(ctx context.Context, massifHeight uint8, otype storage.ObjectType) (uint32, error) {
-	c := r.Selected
-	if c == nil {
-		return 0, storage.ErrLogNotSelected
-	}
-
-	return r.lastObjectWithHeight(ctx, c, massifHeight, otype)
 }
 
 // Helper functions for error translation
